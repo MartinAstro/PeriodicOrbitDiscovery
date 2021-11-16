@@ -54,7 +54,7 @@ def solve_ivp_problem(T, state, model, planet, t_eval=None):
     for i in range(len(t_plot)):
         y = y_plot[:,i].reshape((1,6))
 
-        trad_oe = cart2oe_tf(y, planet.mu)        
+        trad_oe = cart2trad_tf(y, planet.mu)        
         mil_oe = cart2milankovitch_tf(y, planet.mu)
         equi_oe = oe2equinoctial_tf(trad_oe)
         del_oe = oe2delaunay_tf(trad_oe, planet.mu)
@@ -76,7 +76,7 @@ def main():
     # OE = np.array([[planet.radius*2, 0.01, np.pi/4, 0.1, 0.1, 0.1]]).astype(np.float32)
     # OE = np.array([[planet.radius*2, 0.01, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
     OE = np.array([[planet.radius*2, 0.1, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
-
+    OE = np.array([[planet.radius*2, 0.01, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
     df = pd.read_pickle("Data/Dataframes/eros_grav_model_minus_pm.data")
     # df = pd.read_pickle("Data/Dataframes/eros_grav_model.data")
     config, model  = load_config_and_model(df.iloc[-1]['id'], df)
@@ -84,11 +84,17 @@ def main():
     T = 0.1
     N = 20
     t_eval = np.linspace(0, T, N)
-
-    T = 100000
+    
+    n = np.sqrt(planet.mu/OE[0,0]**3)
+    T = 2*np.pi/n 
+    # T = 100000
     t_eval = None
-    R, V = oe2cart_tf(OE, planet.mu)
+    R, V = trad2cart_tf(OE, planet.mu)
     state = np.hstack((R.numpy(),V.numpy()))
+
+    n = np.sqrt(planet.mu/(planet.radius*3)**3)
+    T = 2*np.pi/n *2
+    state = np.array([-6.36256532e+02, -4.58656092e+04,  1.31640352e+04,  3.17126984e-01, -1.12030801e+00, -3.38751010e+00])
     solve_ivp_problem(T, state, model, planet, t_eval)
 
 

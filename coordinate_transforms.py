@@ -2,16 +2,23 @@
 import tensorflow as tf
 import numpy as np
 
-def convert_angle(angle):
+def _convert_angle_cond_1(angle):
     pi = tf.constant(np.pi, dtype=angle.dtype)
     angle = tf.cond(angle > pi, lambda: angle - 2*pi, lambda: angle)
-    angle = tf.cond(angle < -pi, lambda: angle + 2*pi, lambda: angle)
-
-    # angle = tf.cond(angle > 2*pi, lambda: angle - 2*pi, lambda: angle)
-    # angle = tf.cond(angle < 0.0, lambda: angle + 2*pi, lambda: angle)
-
     return angle
-    
+
+def _convert_angle_cond_2(angle):
+    pi = tf.constant(np.pi, dtype=angle.dtype)
+    angle = tf.cond(angle < -pi, lambda: angle + 2*pi, lambda: angle)
+    return angle
+
+def convert_angle(angle):
+    angle = tf.reshape(angle, [-1,1])
+    angle = tf.map_fn(fn= lambda angle : _convert_angle_cond_1(angle), elems=angle)
+    angle = tf.map_fn(fn= lambda angle : _convert_angle_cond_2(angle), elems=angle)
+    angle = tf.reshape(angle, [-1])
+    return angle
+
 def sph2cart_tf(r_vec):
     r = r_vec[:,0] #[0, inf]
     pi = tf.constant(np.pi, dtype=r.dtype)
@@ -28,34 +35,62 @@ def tf_dot(a, b):
     result = tf.reduce_sum(a*b)
     return result
 
-def fFunc(M, E, e): #Computes true anomaly
+def fFunc(M, E, e): # Residual Function
     val = M - (E-e*tf.sin(E))
     return val
 
-def fFuncH(M, H, e): #Computes true anomaly
+def fFuncH(M, H, e): # Residual Function
     val = M - (e*tf.sinh(H) - H)
     return val
 
-def semilatus_rectum(a, e):
-    p = tf.cond(e > 1, lambda: a*(tf.square(e) - 1.0), lambda : a*(1-tf.square(e)))
+def _semilatus_rectum_cond(OE):
+    a = OE[0]
+    e = OE[1]
+    p = tf.cond(e > 1., lambda: a*(tf.square(e) - 1.0), lambda : a*(1.-tf.square(e)))
     return p
 
-def computeM_elliptic(f,e):
+def semilatus_rectum(OE):
+    p = tf.map_fn(fn=lambda OE: _semilatus_rectum_cond(OE), elems=OE)
+    # p = tf.cast(p, tf.float32)
+    return p
+
+def _conditional_I(i):
+    pi = tf.constant(np.pi, dtype=i.dtype)
+    I = tf.cond(i > pi/2.0, lambda : -1.0, lambda : 1.0)
+    return I 
+
+def get_I(i):
+    i = tf.map_fn(fn= lambda i : _conditional_I(i), elems=i)
+    i = tf.reshape(i, [-1])
+    return i 
+
+def _computeM_elliptic(f,e):
     E = 2.*tf.atan2(tf.sqrt((1.-e)/(1.+e))*tf.tan(f/2.0),1.0)
     M = E - e*tf.sin(E)
     return M
 
-def computeM_hyperbolic(f,e):
+def _computeM_hyperbolic(f,e):
     term1 = tf.sqrt((e-1.)/(e+1.))*tf.tan(f/2.0)
     H = 2.*tf.atanh(term1)
     M = e*tf.sinh(H) - H
     return M
 
-def computeMeanAnomaly(f, e):
-    M = tf.cond(e > 1, lambda: computeM_hyperbolic(f,e), lambda: computeM_elliptic(f,e))
+def _conditional_mean_anomaly_map(elems):
+    f = elems[0]
+    e = elems[1]
+    M = tf.cond(e > 1, lambda: _computeM_hyperbolic(f,e), lambda: _computeM_elliptic(f,e))
     return M
 
-def computeEccentricAnomaly(M, e):
+def computeMeanAnomaly(f, e):
+    f = tf.reshape(f, [-1,1])
+    e = tf.reshape(e, [-1,1])
+    elems = tf.stack((f,e), 1)
+    M =  tf.map_fn(fn=lambda elems : _conditional_mean_anomaly_map(elems), elems=(elems))
+    M = tf.reshape(M, [-1])
+    return M
+
+
+def _computeEccentricAnomaly(M, e):
     E = tf.identity(M)
     for _ in range(10):
         f0 = fFunc(M,E,e)
@@ -64,7 +99,7 @@ def computeEccentricAnomaly(M, e):
         E = E + deltaE
     return E
 
-def computeHyperbolicAnomaly(M, e):
+def _computeHyperbolicAnomaly(M, e):
     H = tf.identity(M)
     for i in range(10):
         f0 = fFuncH(M,H,e)
@@ -72,33 +107,33 @@ def computeHyperbolicAnomaly(M, e):
         H = H - f0/dfdH
     return H
 
-def computeTrueAnomaly_elliptic(OE):
+def _computeTrueAnomaly_elliptic(OE):
     e = OE[1]
     M = OE[5]
     # e = OE[:,1]
     # M = OE[:,5]
-    E = computeEccentricAnomaly(M, e)
+    E = _computeEccentricAnomaly(M, e)
     f_New = 2.0*tf.math.atan2(tf.sqrt((1.0+e)/(1.0-e))*tf.tan(E/2.0),1.0)
     return f_New
 
-def computeTrueAnomaly_hyperbolic(OE):
+def _computeTrueAnomaly_hyperbolic(OE):
     e = OE[1]
     M = OE[5]
     # e = OE[:,1]
     # M = OE[:,5]
 
-    H = computeHyperbolicAnomaly(M, e)
+    H = _computeHyperbolicAnomaly(M, e)
     f_New = 2.0*tf.math.atan2(tf.sqrt((e + 1.)/(e- 1.))*tf.tanh(H/2.0),1.0)
     return f_New
 
-def conditional_anomaly(OE):
+def _conditional_true_anomaly_map(OE):
     e = OE[1]
-    f_New = tf.cond(tf.greater(e,1), lambda: computeTrueAnomaly_hyperbolic(OE), lambda: computeTrueAnomaly_elliptic(OE))
-    f_New = convert_angle(f_New)
+    f_New = tf.cond(tf.greater(e,1), lambda: _computeTrueAnomaly_hyperbolic(OE), lambda: _computeTrueAnomaly_elliptic(OE))
     return f_New
 
 def computeTrueAnomaly(OE):
-    f_New = tf.map_fn(fn= lambda OE : conditional_anomaly(OE), elems=OE)
+    f_New = tf.map_fn(fn= lambda OE : _conditional_true_anomaly_map(OE), elems=OE)
+    f_New = convert_angle(f_New)
     return f_New 
 
 
@@ -144,6 +179,11 @@ def delaunay2oe_tf(DelaunayOE, mu):
     OE = tf.stack([a,e,i,omega, Omega, M],1)
     return OE
 
+def cart2delaunay_tf(X, mu):
+    trad = cart2trad_tf(X, mu)
+    delaunay_oe = oe2delaunayl_tf(trad)
+    return delaunay_oe
+
 # Equinoctial
 def oe2equinoctial_tf(OE):
     """Convert traditional elements to equinoctial elements
@@ -159,9 +199,9 @@ def oe2equinoctial_tf(OE):
     # prograde i in [0, 90]
     # retrograde i in [90, 180]
     pi = tf.constant(np.pi, dtype=a.dtype)
-    I = tf.cond(i > pi/2.0, lambda : -1.0, lambda : 1.0)
+    I = get_I(i)
 
-    p = semilatus_rectum(a,e)
+    p = semilatus_rectum(OE)
     f = e*tf.cos(omega + I*Omega)
     g = e*tf.sin(omega + I*Omega)
 
@@ -194,7 +234,7 @@ def equinoctial2oe_tf(equi_OE):
 
     # i = 2*tf.atan2(h,tf.cos(Omega))
     i = 2*tf.atan2(tf.sqrt(tf.square(h) + tf.square(k)),1.0)
-    I = tf.cond(i > pi/2.0, lambda : -1.0, lambda : 1.0)
+    I = get_I(i)
 
     omega = tf.math.atan2(g,f) - I*Omega 
     omega = convert_angle(omega)
@@ -207,7 +247,10 @@ def equinoctial2oe_tf(equi_OE):
     trad_OE = tf.stack([a, e, i, omega, Omega, M], 1)
     return trad_OE
 
-
+def cart2equinoctial_tf(X,mu):
+    trad = cart2trad_tf(X, mu)
+    equi = oe2equinoctial_tf(trad)
+    return equi
 
 # Milankovitch
 def oe2milankovitch_tf(OE, mu):
@@ -220,7 +263,7 @@ def oe2milankovitch_tf(OE, mu):
     Returns:
         milankovitch_OE (tf.Tensor or np.array): [N x 7] (H1, H2, H3, e1, e2, e3, l)
     """
-    R, V = oe2cart_tf(OE, mu)
+    R, V = trad2cart_tf(OE, mu)
     H = tf.linalg.cross(R,V)
     eVec = tf.linalg.cross(V, H) / mu - tf.math.l2_normalize(R)
     f = computeTrueAnomaly(OE)
@@ -310,7 +353,7 @@ def cart2milankovitch_tf(X, mu):
     return Milankovitch_OE
 
 # Traditional
-def oe2cart_tf(OE, mu):
+def trad2cart_tf(OE, mu):
     """Convert traditional elements to equinoctial elements
 
     Args:
@@ -323,7 +366,7 @@ def oe2cart_tf(OE, mu):
     a, e, i, omega, Omega, M = tf.transpose(OE[:,0:6])
     f = computeTrueAnomaly(OE)
 
-    p = semilatus_rectum(a, e)
+    p = semilatus_rectum(OE)
 
     cf = tf.cos(f)
     sf = tf.sin(f)
@@ -351,7 +394,7 @@ def oe2cart_tf(OE, mu):
 
     return tf.transpose(r_xyz), tf.transpose(v_xyz)
 
-def cart2oe_tf(X, mu):
+def cart2trad_tf(X, mu):
     r = X[:,0:3]
     v = X[:,3:6]
 
@@ -392,13 +435,43 @@ def cart2oe_tf(X, mu):
     return OE
 
 
+# Macros functions
+
+def oe2cart_tf(OE, mu, element_set="traditional"):
+    if element_set == "traditional":
+        R,V = trad2cart_tf(OE, mu)
+    elif element_set == "equinoctial":
+        OE = equinoctial2oe_tf(OE)
+        R, V = trad2cart_tf(OE, mu)
+    elif element_set == "milankovitch":
+        R, V = milankovitch2cart_tf(OE, mu)
+    elif element_set == "delaunay":
+        OE = delaunay2oe_tf(OE, mu)
+        R, V = trad2cart_tf(OE, mu)
+    else:
+        NotImplementedError()
+    return R, V
+
+def cart2oe_tf(state, mu, element_set="traditional"):
+    if element_set == "traditional":
+        OE = cart2trad_tf(state, mu)
+    elif element_set == "equinoctial":
+        OE = cart2equinoctial_tf(state, mu)
+    elif element_set == "milankovitch":
+        OE = cart2milankovitch_tf(state, mu)
+    elif element_set == "delaunay":
+        OE = cart2delaunay_tf(state, mu)
+    else:
+        NotImplementedError()
+    return OE
+
 if __name__ == "__main__":
     import numpy as np
     from GravNN.CelestialBodies.Planets import Earth
     planet = Earth()
     mu = planet.mu
     OE = np.array([[planet.radius + 200000, 0.01, np.pi/4, 0, 0, 0]]).astype(np.float32)
-    R, V = oe2cart_tf(OE, mu)
+    R, V = trad2cart_tf(OE, mu)
 
     # equinoctialOE = oe2equinoctial_tf(OE)
     # OE2 = equinoctial2oe_tf(equinoctialOE)

@@ -39,14 +39,19 @@ class LPE():
         OE = tf.Variable(OE_inputs.astype(np.float64), dtype=tf.float64, name='orbit_elements')
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE) 
-            r, v = oe2cart_tf(OE, self.mu)
+            r, v = trad2cart_tf(OE, self.mu)
             u_pred = self.model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, OE)
 
         a, e, i = OE_inputs[:,0:3].T # transpose necessary to assign
-        b = tf.cond(e > 1, lambda : a*np.sqrt(e**2-1.) , lambda : a*np.sqrt(1.-e**2))
-        n = np.sqrt(self.mu/a**3)
+        b = np.array(list(map(lambda e, a: a*np.sqrt(e**2-1.) if np.abs(e) >= 1 else a*np.sqrt(1.-e**2), e, a)))
+        n = np.array(list(map(lambda a: np.sqrt(self.mu/a**3) if a >= 0 else np.sqrt(-self.mu/a**3), a)))
+
+        # n = np.sqrt(self.mu/a**3)
         
+        if np.isnan(n).any():
+            print("Uh oh")
+
         dOEdt = {
             'dadt' : 2.0/(n*a) * dUdOE[:,5],
             'dedt' : -b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5],
@@ -61,11 +66,11 @@ class LPE():
     def dEquinoctial_dt(self, equi_OE):
         # [0]p, [1]f, [2]g, [3]L, [4]h, [5]k
         p,f,g,L,h,k = equi_OE[:, 0:6].T
-        equi_OE = tf.Variable(equi_OE.astype(np.float32), dtype=tf.float32, name='orbit_elements')
+        equi_OE = tf.Variable(equi_OE.astype(np.float64), dtype=tf.float64, name='orbit_elements')
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(equi_OE) 
             OE = equinoctial2oe_tf(equi_OE)
-            r, v = oe2cart_tf(OE, self.mu)
+            r, v = trad2cart_tf(OE, self.mu)
             u_pred = self.model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, equi_OE)
 
@@ -86,13 +91,13 @@ class LPE():
 
     def dDelaunay_dt(self, delaunay_OE):
         l, g, h, L, G, H= delaunay_OE[:, 0:6].T
-        delaunay_OE = tf.Variable(delaunay_OE.astype(np.float32), dtype=tf.float32, name='orbit_elements')
+        delaunay_OE = tf.Variable(delaunay_OE.astype(np.float64), dtype=tf.float64, name='orbit_elements')
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(delaunay_OE) 
             OE = delaunay2oe_tf(delaunay_OE, self.mu)
-            r, v = oe2cart_tf(OE, self.mu)
+            r, v = trad2cart_tf(OE, self.mu)
             u_pred = self.model.generate_potential(r)
-            H = tf.square(self.mu)/(2.0*tf.square(L.astype(np.float32))) + u_pred
+            H = tf.square(self.mu)/(2.0*tf.square(L.astype(np.float64))) + u_pred
         dUdOE = tape.gradient(H, delaunay_OE)
 
         dOEdt = {
@@ -100,14 +105,14 @@ class LPE():
             'dgdt' : -dUdOE[:,4],
             'dhdt' : -dUdOE[:,5],
             'dLdt' : -dUdOE[:,0],
-            'dGdt' : -dUdOE[:,2],
-            'dHdt' : -dUdOE[:,3]
+            'dGdt' : -dUdOE[:,1],
+            'dHdt' : -dUdOE[:,2]
         }
        
         return dOEdt
 
     def dMilankovitch_dt(self, mil_OE):
-        milankovitch_OE = tf.Variable(mil_OE.astype(np.float32), dtype=tf.float32, name='orbit_elements')
+        milankovitch_OE = tf.Variable(mil_OE.astype(np.float64), dtype=tf.float64, name='orbit_elements')
         H = milankovitch_OE[:, 0:3]
         e = milankovitch_OE[:, 3:6]
         L = milankovitch_OE[:, 6]

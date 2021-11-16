@@ -36,7 +36,7 @@ def solve_ivp_problem(T, OE, lpe, t_eval=None):
 
     r_plot = []
     for y in y_plot.T:
-        R,V = oe2cart_tf(np.array([y.T]), lpe.mu)
+        R,V = trad2cart_tf(np.array([y.T]), lpe.mu)
         r_plot.append(R)
 
     op.plot_orbit_3d(np.array(r_plot).T.squeeze())
@@ -52,6 +52,7 @@ def main():
     OE = np.array([[planet.radius*2, 0.01, np.pi/4, 0.1, 0.1, 0.1]]) 
     OE = np.array([[planet.radius*2, 0.01, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
     OE = np.array([[planet.radius*2, 0.1, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
+    # OE = np.array([[planet.radius*1, 0.1, np.pi/4, np.pi/3, np.pi/3, np.pi/3]]).astype(np.float32)
 
     df = pd.read_pickle("Data/Dataframes/eros_grav_model_minus_pm.data")
 
@@ -61,7 +62,9 @@ def main():
     # N = 20
     # t_eval = np.linspace(0,T, N)
 
-    T = 100000
+    n = np.sqrt(planet.mu/OE[0,0]**3)
+    T = 2*np.pi/n
+    # T = 100000
     t_eval = None
     
     lpe = LPE(model, config, planet.mu, OE, element_set='traditional')
