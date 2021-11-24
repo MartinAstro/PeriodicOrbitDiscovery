@@ -435,7 +435,7 @@ def cart2trad_tf(X, mu):
     return OE
 
 
-# Macros functions
+# Macro functions
 
 def oe2cart_tf(OE, mu, element_set="traditional"):
     if element_set == "traditional":

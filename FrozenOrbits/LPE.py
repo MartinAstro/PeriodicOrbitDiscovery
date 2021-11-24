@@ -1,14 +1,13 @@
-from coordinate_transforms import *
+from FrozenOrbits.coordinate_transforms import *
 import tensorflow as tf
 import numpy as np
 
 
 
 class LPE():
-    def __init__(self, model, config, mu, OE, element_set='traditional'):
+    def __init__(self, model, config, mu, element_set='traditional'):
         self.model = model
         self.config = config 
-        self.trad_OE = OE
         self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
         self.element_set =  element_set.lower()
         self.eval_fcn = self.get_eval_fcn()
