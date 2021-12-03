@@ -15,12 +15,6 @@ from FrozenOrbits.LPE import LPE
 from FrozenOrbits.coordinate_transforms import oe2cart_tf
 from FrozenOrbits.utils import compute_period, sample_safe_trad_OE
 
-def load_data(model_name):
-    path = os.path.dirname(FrozenOrbits.__file__)
-    file = path +  "/../Data/BVP_Solutions/V2/" + model_name + "_stats.data"
-    with open(file, 'rb') as f:
-        results = pickle.load(f)
-    return results    
 
 def main():
     path = os.path.dirname(FrozenOrbits.__file__)
@@ -30,42 +24,41 @@ def main():
     config, model  = load_config_and_model(df.iloc[-1]['id'], df)
     lpe = LPE(model, config, planet.mu, element_set="traditional")
     vis = VisualizationBase(formatting_style="AIAA")
-
-    results = load_data("PINN")
+    start = 0
     total_orbits = 5
-    k = 0
-    orbits_plotted = 0
-    while orbits_plotted < total_orbits:
-        print(k)
-        if orbits_plotted == 0:
+    for i in range(start, total_orbits):
+        print(i)
+        if i == 0:
             new = True
             obj_file = Eros().model_potatok 
         else:
             new = False
             obj_file = None
 
-        criteria = (results[k]['failure'] == "None")
-        if criteria: 
-            criteria = criteria * (results[k]['closest_approach'] < 3000)
-            criteria = criteria * (np.linalg.norm(results[k]['closest_state'][3:6] - results[k]['initial_condition'][3:6]) < 0.3)
-        if not criteria:
-            k += 1
-            continue
-        else:
-            orbits_plotted +=1 
-        state = results[k]['initial_condition']
-
+        trad_OE = sample_safe_trad_OE(planet.radius, planet.radius*10)
+        T = compute_period(planet.mu, trad_OE[0,0])
+        state = np.hstack(oe2cart_tf(trad_OE, planet.mu))
         lpe = LPE(model, config, planet.mu, element_set="traditional")
+        t_coarse_mesh = np.linspace(T-(T/3), T+(T/3), 5000)
 
-        sol = solve_ivp_pos_problem(results[k]['t_closest_approach'], state, lpe, t_eval=None, events=None, args=(state,))
+        sol = solve_ivp_pos_problem(T*1.5, state, lpe, t_eval=t_coarse_mesh, events=None, args=(state,))
+
+        dstate = np.linalg.norm(sol.y - state.reshape((6,1)), axis=0)
+        time = sol.t[np.where(dstate == np.min(dstate))][0]
+        t_fine_mesh = np.linspace(time-(time/5), time+(time/5), 5000)
+
+        sol = solve_ivp_pos_problem(T*1.5, state, lpe, t_eval=t_fine_mesh, events=None, args=(state,))
+
+        dstate = np.linalg.norm(sol.y - state.reshape((6,1)), axis=0)
+        time = sol.t[np.where(dstate == np.min(dstate))]
+
+        sol = solve_ivp_pos_problem(time[0], state, lpe, t_eval=None, events=None, args=(state,))
 
         op.plot3d(None, sol.y, None, show=False, obj_file=obj_file, save=False, traj_cm=None, new_fig=new)
         plt.gca().view_init(65,45)
-        k +=1
-
 
     
-    vis.save(plt.gcf(), path +  "/../Plots/Unique_Orbits.pdf")
+    vis.save(plt.gcf(), path +  "/../Plots/Random_Orbits.pdf")
     plt.show()
 
 

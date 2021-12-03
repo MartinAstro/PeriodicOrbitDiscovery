@@ -16,7 +16,7 @@ def bc(ya, yb, p=None):
     bc_res = np.hstack((periodic_res))#, ic_res))
     return bc_res
 
-def solve_bvp_pos_problem(T, state, lpe, initial_nodes=100, t_eval=None, tol=1e-4, bc_tol=1e0, max_nodes=300000):
+def solve_bvp_pos_problem(T, state, lpe, initial_nodes=100, t_eval=None, tol=1e-4, bc_tol=1e0, max_nodes=300000, model_includes_pm=False):
 
     def fun(x,y,p=None):
         "Return the first-order system"
@@ -25,14 +25,14 @@ def solve_bvp_pos_problem(T, state, lpe, initial_nodes=100, t_eval=None, tol=1e-
         r = np.linalg.norm(R, axis=0)
         a_pm_sph = np.vstack((-lpe.mu/r**2, np.zeros((len(r),)),np.zeros((len(r),)))).T
         r_sph = cart2sph(R.T)
-        a_pm_xyz = invert_projection(r_sph, a_pm_sph)
         a = lpe.model.generate_acceleration(R.T).numpy()
-        dxdt = np.vstack((V, (a_pm_xyz - a).T))
+        if model_includes_pm:
+            dxdt = np.vstack((V, (a).T))
+        else:
+            a_pm_xyz = invert_projection(r_sph, a_pm_sph)
+            dxdt = np.vstack((V, (a_pm_xyz - a).T))
         return dxdt.reshape((6,-1))
     
-    # t_mesh = np.linspace(0, T/50 -1, initial_nodes//3)
-    # t_mesh = np.hstack((t_mesh, np.linspace(T/50, T - (T/50) - 1, initial_nodes//3)))
-    # t_mesh = np.hstack((t_mesh, np.linspace(T - (T/50), T, initial_nodes//3)))
     t_mesh = np.linspace(0, T, initial_nodes)
     sol = solve_ivp_pos_problem(T, state, lpe, t_eval=t_mesh)
     y_guess = sol.y

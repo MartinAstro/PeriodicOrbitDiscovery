@@ -3,6 +3,7 @@ Scratch/*
 Notes/*
 iterative_bvp/*
 Data/*
+Plots/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

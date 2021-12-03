@@ -33,6 +33,29 @@ def plot_OE_suite_from_state_sol(sol, planet):
 
 
 
+def plot_OE_from_state_sol(sol, planet, OE_set='traditional'):
+    t_plot = sol.t
+    y_plot = sol.y # [6, N]
+    
+    oe_list = []
+    for i in range(len(t_plot)):
+        y = y_plot[:,i].reshape((1,6))
+
+        if OE_set == "milankovitch":
+            OE = cart2milankovitch_tf(y, planet.mu)
+        if OE_set == "traditional":
+            OE = cart2trad_tf(y, planet.mu)        
+        if OE_set == "delaunay":
+            trad_oe = cart2trad_tf(y, planet.mu)        
+            OE = oe2delaunay_tf(trad_oe, planet.mu)
+        if OE_set == "equinoctial":
+            trad_oe = cart2trad_tf(y, planet.mu)        
+            OE = oe2equinoctial_tf(trad_oe)
+
+        oe_list.append(OE[0,:].numpy())
+    op.plot_OE(t_plot, np.array(oe_list).squeeze().T, OE_set=OE_set)
+
+
 
 def plot_OE_results(results, T, lpe):
     t_plot = np.linspace(0, T, 1000)
