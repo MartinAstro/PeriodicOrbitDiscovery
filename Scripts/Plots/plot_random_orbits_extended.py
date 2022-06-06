@@ -55,7 +55,7 @@ def main():
 
         sol = solve_ivp_pos_problem(time[0]*5, state, lpe, t_eval=None, events=None, args=(state,))
 
-        op.plot3d(None, sol.y, None, show=False, obj_file=obj_file, save=False, traj_cm=None, new_fig=new)
+        op.plot3d(sol.y, show=False, obj_file=obj_file, save=False, traj_cm=None, new_fig=new)
         plt.gca().view_init(65,45)
 
     
