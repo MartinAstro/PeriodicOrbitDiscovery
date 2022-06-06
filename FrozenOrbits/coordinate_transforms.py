@@ -2,6 +2,19 @@
 import tensorflow as tf
 import numpy as np
 
+def _convert_angle_positive(angle):
+    zero = tf.constant(0, dtype=angle.dtype)
+    pi = tf.constant(np.pi, dtype=angle.dtype)
+    angle = tf.cond(angle < zero, lambda: angle + 2*pi, lambda: angle)
+    return angle
+
+
+def make_angle_positive(angle):
+    angle = tf.reshape(angle, [-1,1])
+    angle = tf.map_fn(fn= lambda angle : _convert_angle_positive(angle), elems=angle)
+    angle = tf.reshape(angle, [-1, 1])
+    return angle
+
 def _convert_angle_cond_1(angle):
     pi = tf.constant(np.pi, dtype=angle.dtype)
     angle = tf.cond(angle > pi, lambda: angle - 2*pi, lambda: angle)
@@ -16,7 +29,7 @@ def convert_angle(angle):
     angle = tf.reshape(angle, [-1,1])
     angle = tf.map_fn(fn= lambda angle : _convert_angle_cond_1(angle), elems=angle)
     angle = tf.map_fn(fn= lambda angle : _convert_angle_cond_2(angle), elems=angle)
-    angle = tf.reshape(angle, [-1])
+    angle = tf.reshape(angle, [-1, 1])
     return angle
 
 def sph2cart_tf(r_vec):
@@ -32,7 +45,7 @@ def sph2cart_tf(r_vec):
     return tf.stack([x,y,z],1)
 
 def tf_dot(a, b):
-    result = tf.reduce_sum(a*b)
+    result = tf.reduce_sum(a*b, axis=1, keepdims=True)
     return result
 
 def fFunc(M, E, e): # Residual Function
@@ -205,7 +218,7 @@ def oe2equinoctial_tf(OE):
     f = e*tf.cos(omega + I*Omega)
     g = e*tf.sin(omega + I*Omega)
 
-    v = computeTrueAnomaly(OE)
+    v = computeTrueAnomaly(OE)[0]
 
     L = v + I*Omega + omega
     h = tf.cond(I == 1.0, lambda : tf.tan(i/2.0)*tf.cos(Omega), lambda:  tf.atan2(i, 2.0)*tf.cos(Omega))
@@ -282,18 +295,19 @@ def milankovitch2cart_tf(milOE, mu):
     """
     H = milOE[:,0:3]
     e = milOE[:,3:6]
-    L = milOE[:,6]
+    L = tf.reshape(milOE[:,6], [-1, 1])
 
-    H_hat, H_mag = tf.linalg.normalize(H)
-    e_hat, e_mag = tf.linalg.normalize(e)
-    e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat))
+    H_hat, H_mag = tf.linalg.normalize(H, axis=1)
+    e_hat, e_mag = tf.linalg.normalize(e, axis=1)
+    e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat),)
 
-    x_hat = tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype)
-    y_hat = tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype)
-    z_hat = tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype)
+    multiples = tf.constant([len(H), 1])
+    x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype), multiples)
+    y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype), multiples)
+    z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype), multiples)
 
     intermediate = tf.linalg.cross(z_hat, H)
-    inter_hat, inter_mag = tf.linalg.normalize(intermediate)
+    inter_hat, inter_mag = tf.linalg.normalize(intermediate,axis=1)
     Omega = tf.acos(-tf_dot(y_hat, H)/inter_mag)
 
     omega = tf.acos(tf_dot(e, intermediate)/(e_mag*inter_mag))
@@ -303,7 +317,7 @@ def milankovitch2cart_tf(milOE, mu):
     f = convert_angle(f)
     
     vVec = mu/H_mag*(-tf.sin(f)*e_hat + (e_mag+tf.cos(f))*e_perp)
-    v_hat, v_mag = tf.linalg.normalize(vVec)
+    v_hat, v_mag = tf.linalg.normalize(vVec, axis=1)
     r_hat = -(e - tf.linalg.cross(vVec, H)/mu)
 
     theta = tf.acos(tf_dot(r_hat,v_hat))
@@ -348,6 +362,7 @@ def cart2milankovitch_tf(X, mu):
     f = convert_angle(f)
 
     L_val = Omega + omega + f
+    # L_val = make_angle_positive(L_val) # Possible take away
     L = tf.reshape(L_val, (1,1))
     Milankovitch_OE = tf.concat((H, e, L), axis=1)
     return Milankovitch_OE

@@ -5,13 +5,14 @@ import numpy as np
 
 
 class LPE():
-    def __init__(self, model, config, mu, element_set='traditional'):
+    def __init__(self, model, mu, element_set='traditional'):
         self.model = model
-        self.config = config 
         self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
         self.element_set =  element_set.lower()
         self.eval_fcn = self.get_eval_fcn()
         # self.init_OE = self.get_init_OE()
+
+    
     
     def get_eval_fcn(self):
         if self.element_set == "traditional":
@@ -39,7 +40,7 @@ class LPE():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE) 
             r, v = trad2cart_tf(OE, self.mu)
-            u_pred = self.model.generate_potential(r)
+            u_pred = self.model.gravity_model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, OE)
 
         a, e, i = OE_inputs[:,0:3].T # transpose necessary to assign
@@ -119,48 +120,52 @@ class LPE():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(milankovitch_OE) 
             r,v = milankovitch2cart_tf(milankovitch_OE, self.mu)
-            u_pred = self.model.generate_potential(r)
+            u_pred = self.model.gravity_model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, milankovitch_OE)
 
-        dUdH = dUdOE[0,0:3].numpy()
-        dUde = dUdOE[0,3:6].numpy()
-        dUdl = dUdOE[0,6].numpy()
+        dUdH = dUdOE[:,0:3].numpy().reshape((-1,3))
+        dUde = dUdOE[:,3:6].numpy().reshape((-1,3))
+        dUdl = dUdOE[:,6].numpy().reshape((-1,1))
 
-        H_mag = np.linalg.norm(H)
-        e_mag = np.linalg.norm(e)
-        r_mag = np.linalg.norm(r)
+        H_mag = np.linalg.norm(H,axis=1).reshape((-1,1))
+        e_mag = np.linalg.norm(e,axis=1).reshape((-1,1))
+        r_mag = np.linalg.norm(r,axis=1).reshape((-1,1))
 
-        z_hat = np.array([0.0,0.0,1.0])
-        rVec = r[0,:]
+        z_hat = np.tile(np.array([0.0,0.0,1.0]), (len(H),1))
+        rVec = r
         
-        HVec = H[0,:]#.numpy()
-        eVec = e[0,:]#.numpy()
-        LVal = L[0]#.numpy()
+        HVec = H.numpy()
+        eVec = e.numpy()
+        LVal = L.numpy().reshape(-1,1)#.numpy()
         
         r_hat = rVec/r_mag
 
-        term1 = (HVec + H_mag*z_hat)/(H_mag + np.dot(z_hat, HVec))#
+        def element_dot(a,b):
+            # what once was np.dot
+            return np.sum(a * b,axis=1).reshape((-1,1))
+
+        term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
         term2 = (1.0-e_mag**2)/H_mag**2
-        term3 = (2.0 + np.dot(r_hat, eVec))*r_hat + eVec
-        term4 = np.dot(z_hat, eVec)/(H_mag*(H_mag + np.dot(z_hat, HVec))) 
+        term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
+        term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
 
         H_dt = np.cross(HVec, dUdH) + np.cross(eVec, dUde) + term1*dUdl # good
         e_dt = np.cross(eVec, dUdH) + term2*np.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
-        L_dt = -np.dot(term1,dUdH) - 1.0/H_mag*np.dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+        L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
 
         dOEdt = {
-            'dh1dt' : H_dt[0],
-            'dh2dt' : H_dt[1],
-            'dh3dt' : H_dt[2],
-            'de1dt' : e_dt[0],
-            'de2dt' : e_dt[1],
-            'de3dt' : e_dt[2],
-            'dLdt' : tf.constant(L_dt, dtype=H_dt[0].dtype)
+            'dh1dt' : H_dt[:,0],
+            'dh2dt' : H_dt[:,1],
+            'dh3dt' : H_dt[:,2],
+            'de1dt' : e_dt[:,0],
+            'de2dt' : e_dt[:,1],
+            'de3dt' : e_dt[:,2],
+            'dLdt' : tf.constant(L_dt, dtype=H_dt[0,0].dtype)
         }
        
-        for val in dOEdt.values():
-            if tf.math.is_nan(val).numpy():
-                pass
+        # for val in dOEdt.values():
+        #     if tf.math.is_nan(val).numpy():
+        #         pass
 
 
         return dOEdt

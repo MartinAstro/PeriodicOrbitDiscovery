@@ -1,7 +1,9 @@
 import numpy as np
+import copy
 from FrozenOrbits.ivp import *
 from FrozenOrbits.coordinate_transforms import *
 import matplotlib.pyplot as plt
+from GravNN.Visualization.VisualizationBase import VisualizationBase
 import OrbitalElements.orbitalPlotting as op
 import matplotlib.animation as animation
 
@@ -31,8 +33,6 @@ def plot_OE_suite_from_state_sol(sol, planet):
     op.plot_OE(t_plot, np.array(equi_oe_list).squeeze().T, OE_set='equinoctial')
     op.plot_OE(t_plot, np.array(del_oe_list).squeeze().T, OE_set='delaunay')
 
-
-
 def plot_OE_from_state_sol(sol, planet, OE_set='traditional'):
     t_plot = sol.t
     y_plot = sol.y # [6, N]
@@ -54,8 +54,6 @@ def plot_OE_from_state_sol(sol, planet, OE_set='traditional'):
 
         oe_list.append(OE[0,:].numpy())
     op.plot_OE(t_plot, np.array(oe_list).squeeze().T, OE_set=OE_set)
-
-
 
 def plot_OE_results(results, T, lpe):
     t_plot = np.linspace(0, T, 1000)
@@ -110,4 +108,63 @@ def plot_pos_results(results, T, lpe, obj_file=None, animate=False):
         #     fps=15, metadata=dict(artist='Me'), bitrate=1800)
         # ani.save("movie.mp4", writer=writer)
 
-    plt.show()
+def plot_1d_solutions(t_mesh, solution, new_fig=True, y_scale=None):
+    if new_fig:
+        plt.figure()
+
+    y_vec = copy.deepcopy(solution.y)
+    y_suffix = ""
+    if y_scale is not None:
+        y_vec[0:3] = y_vec[0:3]/y_scale
+        y_suffix = "'" # prime
+
+    plt.subplot(3,2,1)
+    plt.plot(t_mesh, y_vec[0])
+    plt.ylabel('x'+y_suffix)
+    plt.subplot(3,2,3)
+    plt.plot(t_mesh, y_vec[1])
+    plt.ylabel('y'+y_suffix)
+    plt.subplot(3,2,5)
+    plt.plot(t_mesh, y_vec[2])
+    plt.ylabel('z'+y_suffix)
+    plt.xlabel("Time [s]")
+
+    plt.subplot(3,2,2)
+    plt.plot(t_mesh, y_vec[3])
+    plt.ylabel('v_x')
+    plt.subplot(3,2,4)
+    plt.plot(t_mesh, y_vec[4])
+    plt.ylabel('v_y')
+    plt.subplot(3,2,6)
+    plt.plot(t_mesh, y_vec[5])
+    plt.ylabel('v_z')
+    plt.xlabel("Time [s]")
+
+
+def plot_3d_solutions(t_mesh, init_sol, results, sol, obj_file, y_scale=1):
+    xi, yi, zi = init_sol.y[0:3,0] # initial starting guess from which R0 was based
+    xf, yf, zf = results.sol(t_mesh[0])[0:3]
+
+    fig =plt.figure()
+    ax = fig.add_subplot(221, projection='3d')
+    if init_sol is not None:
+        op.plot3d(init_sol.y[0:3], obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
+        plt.gca().scatter(xi,yi,zi, s=3)
+        plt.gca().scatter(xf,yf,zf, s=3, c='r')
+    plt.title("Initial State")
+    
+    ax = fig.add_subplot(222, projection='3d')
+    if results is not None:
+        op.plot3d(results.sol(t_mesh), obj_file=obj_file, new_fig=False,  traj_cm=plt.cm.PuOr) 
+        plt.gca().scatter(xi,yi,zi, s=3)
+        plt.gca().scatter(xf,yf,zf, s=3, c='r')
+    plt.title("BVP Solution")
+
+    ax = fig.add_subplot(223, projection='3d')
+    if sol is not None:
+        op.plot3d(sol.y[0:3], obj_file=obj_file, new_fig=False)
+        plt.gca().scatter(xi,yi,zi, s=3)
+        plt.gca().scatter(xf,yf,zf, s=3, c='r')
+    plt.title("Integrated BVP Solution")
+
+
