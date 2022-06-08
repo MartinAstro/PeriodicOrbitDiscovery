@@ -306,7 +306,7 @@ def milankovitch2cart_tf(milOE, mu):
     y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype), multiples)
     z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype), multiples)
 
-    intermediate = tf.linalg.cross(z_hat, H)
+    intermediate = tf.linalg.cross(z_hat, H) # can cause issues if H in z_hat direction
     inter_hat, inter_mag = tf.linalg.normalize(intermediate,axis=1)
     Omega = tf.acos(-tf_dot(y_hat, H)/inter_mag)
 

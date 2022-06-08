@@ -141,30 +141,11 @@ def plot_1d_solutions(t_mesh, solution, new_fig=True, y_scale=None):
     plt.xlabel("Time [s]")
 
 
-def plot_3d_solutions(t_mesh, init_sol, results, sol, obj_file, y_scale=1):
-    xi, yi, zi = init_sol.y[0:3,0] # initial starting guess from which R0 was based
-    xf, yf, zf = results.sol(t_mesh[0])[0:3]
-
-    fig =plt.figure()
-    ax = fig.add_subplot(221, projection='3d')
-    if init_sol is not None:
-        op.plot3d(init_sol.y[0:3], obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
-        plt.gca().scatter(xi,yi,zi, s=3)
-        plt.gca().scatter(xf,yf,zf, s=3, c='r')
-    plt.title("Initial State")
-    
-    ax = fig.add_subplot(222, projection='3d')
-    if results is not None:
-        op.plot3d(results.sol(t_mesh), obj_file=obj_file, new_fig=False,  traj_cm=plt.cm.PuOr) 
-        plt.gca().scatter(xi,yi,zi, s=3)
-        plt.gca().scatter(xf,yf,zf, s=3, c='r')
-    plt.title("BVP Solution")
-
-    ax = fig.add_subplot(223, projection='3d')
-    if sol is not None:
-        op.plot3d(sol.y[0:3], obj_file=obj_file, new_fig=False)
-        plt.gca().scatter(xi,yi,zi, s=3)
-        plt.gca().scatter(xf,yf,zf, s=3, c='r')
-    plt.title("Integrated BVP Solution")
+def plot_3d_trajectory(sol, obj_file):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    xf, yf, zf = sol.y[0:3,0]
+    op.plot3d(sol.y[0:3], obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
+    plt.gca().scatter(xf,yf,zf, s=3, c='r')
 
 

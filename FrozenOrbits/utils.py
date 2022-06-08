@@ -3,15 +3,16 @@ from FrozenOrbits.coordinate_transforms import cart2oe_tf
 
 
 from scipy.fft import fftn, ifftn
-from FrozenOrbits.ivp import solve_ivp_pos_problem, solve_ivp_oe_problem
+from FrozenOrbits.dynamics import dynamics_ivp
 import os
+import trimesh
 import GravNN
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import OrbitalElements.orbitalPlotting as op
 from GravNN.CelestialBodies.Asteroids import Eros
-
+from scipy.integrate import solve_ivp
 class Solution:
     def __init__(self, y, t):
         self.y = y
@@ -151,6 +152,9 @@ def get_S_matrix(y_guess, lpe, option="None"):
         S[6, 6] = -1.0
     return S
 
+
+
+
 def check_solution_validity(results, proximity, lpe, max_radius_in_km):
     # Check that the integrated solution doesn't violate any conditions
     # i.e. run into the surface of the asteroid. 
@@ -204,3 +208,12 @@ def get_solution_metrics(results, sol):
         vel_diff = None
 
     return bc_pos_diff, pos_diff, vel_diff
+
+def propagate_orbit(T, x_0, model, tol=1E-12):
+    sol = solve_ivp(dynamics_ivp, 
+                    [0, T], 
+                    x_0, 
+                    args=(model,),
+                    atol=tol, rtol=tol, 
+                    t_eval=np.linspace(0, T, 100))
+    return sol

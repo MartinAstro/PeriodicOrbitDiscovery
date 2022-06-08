@@ -3,6 +3,108 @@ import tensorflow as tf
 import numpy as np
 
 
+class LPE_Milankovitch():
+    def __init__(self, model, mu):
+        self.model = model
+        self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
+        # self.init_OE = self.get_init_OE()
+
+    
+    def dOE_dt(self,mil_OE): 
+        milankovitch_OE = tf.Variable(mil_OE.reshape((1, -1)).astype(np.float64), dtype=tf.float64, name='orbit_elements')
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(milankovitch_OE) 
+            r,v = milankovitch2cart_tf(milankovitch_OE, self.mu)
+            u_pred = self.model.gravity_model.generate_potential(r)
+        dUdOE = tape.gradient(u_pred, milankovitch_OE)
+
+        dUdH = dUdOE[:,0:3].numpy().reshape((-1,3))
+        dUde = dUdOE[:,3:6].numpy().reshape((-1,3))
+        dUdl = dUdOE[:,6].numpy().reshape((-1,1))
+
+        H_mag = np.linalg.norm(H,axis=1).reshape((-1,1))
+        e_mag = np.linalg.norm(e,axis=1).reshape((-1,1))
+        r_mag = np.linalg.norm(r,axis=1).reshape((-1,1))
+
+        z_hat = np.tile(np.array([0.0,0.0,1.0]), (len(H),1))
+        rVec = r
+        
+        HVec = H.numpy()
+        eVec = e.numpy()
+        LVal = L.numpy().reshape(-1,1)#.numpy()
+        
+        r_hat = rVec/r_mag
+
+        def element_dot(a,b):
+            # what once was np.dot
+            return np.sum(a * b,axis=1).reshape((-1,1))
+
+        term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
+        term2 = (1.0-e_mag**2)/H_mag**2
+        term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
+        term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
+
+        H_dt = np.cross(HVec, dUdH) + np.cross(eVec, dUde) + term1*dUdl # good
+        e_dt = np.cross(eVec, dUdH) + term2*np.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
+        L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+
+        dL_dt = tf.constant(L_dt, dtype=H_dt[0,0].dtype)
+        dOE_dt = np.hstack((H_dt, e_dt, dL_dt))
+
+        return dOE_dt[0]
+
+    def dOE_dt_dx(self,mil_OE): 
+        milankovitch_OE = tf.Variable(mil_OE.reshape((1, -1)).astype(np.float64), dtype=tf.float64, name='orbit_elements')
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+        with tf.GradientTape(persistent=True) as tape_dx:
+            with tf.GradientTape(persistent=True) as tape:
+                tape.watch(milankovitch_OE) 
+                r,v = milankovitch2cart_tf(milankovitch_OE, self.mu)
+                u_pred = self.model.gravity_model.generate_potential(r)
+            dUdOE = tape.gradient(u_pred, milankovitch_OE)
+
+            dUdH = dUdOE[:,0:3]
+            dUde = dUdOE[:,3:6]
+            dUdl = dUdOE[:,6]
+
+            H_mag = tf.norm(H)
+            e_mag = tf.norm(e)
+            r_mag = tf.norm(r)
+
+            z_hat = np.tile(np.array([0.0,0.0,1.0]), (len(H),1))
+            rVec = r
+            
+            HVec = H
+            eVec = e
+            LVal = tf.reshape(L,(-1,1))
+            
+            r_hat = rVec/r_mag
+
+            def element_dot(a,b):
+                # what once was np.dot
+                return tf.reshape(tf.reduce_sum(a * b,axis=1),((-1,1)))
+
+            term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
+            term2 = (1.0-e_mag**2)/H_mag**2
+            term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
+            term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
+
+            H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl # good
+            e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
+            L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+
+            dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)
+        
+        dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE)
+
+        return dOE_dt_dx[0].numpy()
+
 
 class LPE():
     def __init__(self, model, mu, element_set='traditional'):
@@ -12,8 +114,6 @@ class LPE():
         self.eval_fcn = self.get_eval_fcn()
         # self.init_OE = self.get_init_OE()
 
-    
-    
     def get_eval_fcn(self):
         if self.element_set == "traditional":
             return self.dOEdt

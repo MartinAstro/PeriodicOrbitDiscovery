@@ -1,14 +1,70 @@
 import numpy as np
 
-# def get_bc(element_set):
-#     if element_set == "traditional":
-#         return trad_bc
-#     # elif element_set == "delaunay":
-#     #     return dDelaunay_dt
-#     elif element_set == "equinoctial":
-#         return equi_bc
-#     # elif element_set == "milankovitch":
-#     #     return dMilankovitch_dt
+
+
+def get_mirror_theorem_bc(y_guess, lpe, true_jac=False):
+    R0 = y_guess[0:3,0]
+
+    def bc(ya, yb, p=None):
+        y_f = yb[1]
+        x_dot_f = yb[3]
+
+        bc_res = np.hstack([y_f, x_dot_f]) #1e4 is approx radius of asteroid
+        return bc_res
+
+    def bc_jac(ya, yb, p=None):
+        n = len(ya)
+        dbc_dya = np.zeros((2,3))
+        dbc_dyb = np.zeros((2,3))
+
+        gx = -(yb[0] - ya[0])/np.linalg.norm(yb-ya)
+        gy = -(yb[1] - ya[1])/np.linalg.norm(yb-ya)
+        gz = -(yb[2] - ya[2])/np.linalg.norm(yb-ya)
+
+        dbc_dya[0] = [-1,-1,-1,0,0,0]
+        dbc_dya[1] = [0,0,0,-1,-1,-1]
+        dbc_dya[2] = [gx,gy,gz,0,0,0]
+        dbc_dya[3] = [1,0,0,0,0,0]
+        dbc_dya[4] = [0,1,0,0,0,0]
+        dbc_dya[5] = [0,0,1,0,0,0]
+
+        dbc_dyb = -dbc_dya
+        dbc_dyb[3:] = 0.0
+
+        return dbc_dya, dbc_dyb
+
+    def fun(x,y,p=None):
+        "Return the first-order system"
+        R = y[0:3]
+        V = y[3:6]
+        a = lpe.model.generate_acceleration(R.T) 
+
+        dxdt = np.vstack((V, a.T))
+        return dxdt
+
+    def fun_jac(x, y, p=None):
+        n = len(y)
+        m = len(y[0])
+        df_dy = np.zeros((n,n,m))
+
+        df_dy[0,:,:] = np.broadcast_to([0,0,0,1,0,0], (m,6)).T
+        df_dy[1,:,:] = np.broadcast_to([0,0,0,0,1,0], (m,6)).T
+        df_dy[2,:,:] = np.broadcast_to([0,0,0,0,0,1], (m,6)).T
+
+        dU_dxdx = lpe.model.gravity_model.generate_dU_dxdx(y[:3].T).numpy() # this actually da_dx
+        df_dy[3:6,0:3,:] = dU_dxdx.T
+        return df_dy
+
+
+    if true_jac:
+        fun_jac = fun_jac
+        bc_jac = bc_jac
+    else:
+        fun_jac = None
+        bc_jac = None
+
+
+    return fun, bc, fun_jac, bc_jac
 
 
 def get_pos_bc_fcns(y_guess, lpe, true_jac=False):
@@ -151,20 +207,3 @@ def get_milankovitch_bc_fcns(y_guess, lpe, true_jac=False):
         bc_jac = None
 
     return fun, bc, fun_jac, bc_jac
-
-
-
-
-# def fun(x,y,p=None):
-#     "Return the first-order system"
-
-#     dxdt = lpe(y.T)
-#     dxdt = np.hstack([[
-#         dxdt['dadt'],
-#         dxdt['dedt'],
-#         dxdt['didt'],
-#         dxdt['domegadt'],
-#         dxdt['dOmegadt'],
-#         dxdt['dMdt'],
-#     ]])
-#     return dxdt

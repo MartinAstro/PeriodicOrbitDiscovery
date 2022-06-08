@@ -14,25 +14,11 @@ def solve_ivp_oe_problem(T, OE, lpe, t_eval=None):
     return sol
     
 
-def solve_ivp_pos_problem(T, state, lpe, t_eval=None, events=None, args=None, atol=1e-8, rtol=1e-10):
-    def fun(x,y,IC=None):
-        "Return the first-order system"
-        R = np.array([y[0:3]])
-        V = np.array([y[3:6]])
-        a = lpe.model.generate_acceleration(R)
-        dxdt = np.hstack((V, a)).squeeze()
-        return dxdt
-    
-    sol = solve_ivp(fun, [0, T], state.reshape((-1,)), t_eval=t_eval, events=events, atol=atol, rtol=rtol, args=args)
-    return sol
-
-
 def backprop_error_vec(T, state_extended, lpe, t_eval=None, events=None, args=None):
     def fun(x,y,IC=None):
         "Return the first-order system"
 
         R, V = y[0:3], y[3:6]
-        # dR, dV = y[6:9], y[9:12]
 
         r = np.linalg.norm(R)
         a_pm_sph = np.array([[-lpe.mu/r**2, 0.0, 0.0]])

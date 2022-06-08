@@ -69,15 +69,20 @@ class pinnGravityModel():
         # a_model *= -1 # to make dynamics work, this will be multiplied by -1    
         
         if not self.removed_pm:
-            return a_model
+            return a_model.squeeze()
         else:
             r = np.linalg.norm(R, axis=1)
             a_pm_sph = np.zeros((len(R), 3))
             a_pm_sph[:,0] = -self.planet.mu/r**2
             r_sph = cart2sph(R)
             a_pm_xyz = invert_projection(r_sph, a_pm_sph)
-            return a_pm_xyz + a_model # a_r < 0
+            return (a_pm_xyz + a_model).squeeze() # a_r < 0
 
+
+    def generate_dadx(self, X):
+        R = np.array(X).reshape((-1,3)).astype(np.float32)
+        dadx = self.gravity_model.generate_dU_dxdx(R).numpy() # this is also > 0
+        return dadx.squeeze()
 
     def generate_potential(self, X):
         R = np.array(X).reshape((-1,3)).astype(np.float32)
