@@ -14,6 +14,7 @@ from FrozenOrbits.visualization import plot_3d_trajectory
 from GravNN.CelestialBodies.Asteroids import Eros
 from FrozenOrbits.coordinate_transforms import cart2oe_tf
 
+from GravNN.Networks.Layers import PreprocessingLayer, PostprocessingLayer
 
 def sample_mirror_orbit(R, mu):
     v_0 = np.sqrt(2*mu/R)*0.7
@@ -22,6 +23,15 @@ def sample_mirror_orbit(R, mu):
     OE = cart2oe_tf(init_state, mu, element_set='milankovitch').numpy()
     return OE, T
 
+def configure_processing_layers(model):
+    x_transformer = model.config['x_transformer'][0]
+    u_transformer = model.config['u_transformer'][0]
+
+    x_preprocessor = PreprocessingLayer(x_transformer.min_, x_transformer.scale_, tf.float64)
+    u_postprocessor = PostprocessingLayer(u_transformer.min_, u_transformer.scale_, tf.float64)
+
+    model.gravity_model.x_preprocessor = x_preprocessor
+    model.gravity_model.u_postprocessor = u_postprocessor
 
 
 def main():
@@ -32,12 +42,19 @@ def main():
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_pinn_III_031222_500R.data")  
     # model = polyhedralGravityModel(planet, planet.obj_8k)
-    lpe = LPE_Milankovitch(model, planet.mu)
 
-    x_0, T = sample_mirror_orbit(planet.radius*3, planet.mu)
+    configure_processing_layers(model)
+
+    lpe = LPE_Milankovitch(model.gravity_model, planet.mu)
+
+    OE_0, T = sample_mirror_orbit(planet.radius*3, planet.mu)
 
     # Run the solver
-    x_0_sol, T_sol = general_variable_time_bvp_OE(T, x_0, lpe)
+    OE_0_sol, T_sol = general_variable_time_bvp_OE(T, OE_0, lpe)
+
+
+    x_0 = oe2cart_tf(OE_0, planet.mu, 'milankovitch').numpy()
+    x_0_sol = oe2cart_tf(OE_0_sol, planet.mu, 'milankovitch').numpy()
 
     # propagate the initial and solution orbits
     init_sol = propagate_orbit(T, x_0, model, tol=1E-8) 

@@ -283,6 +283,8 @@ def oe2milankovitch_tf(OE, mu):
     L = [OE[:,4] + OE[:,3] + f]
     return tf.concat((H,eVec,L),axis=1)
 
+
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
 def milankovitch2cart_tf(milOE, mu):
     """Convert milankovitch elements to cartesian coordinates
 
@@ -301,7 +303,7 @@ def milankovitch2cart_tf(milOE, mu):
     e_hat, e_mag = tf.linalg.normalize(e, axis=1)
     e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat),)
 
-    multiples = tf.constant([len(H), 1])
+    multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
     x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype), multiples)
     y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype), multiples)
     z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype), multiples)
@@ -323,7 +325,6 @@ def milankovitch2cart_tf(milOE, mu):
     theta = tf.acos(tf_dot(r_hat,v_hat))
     r_mag = H_mag/(v_mag*tf.sin(theta))
     rVec = r_mag * r_hat
-    
     return rVec, vVec
 
 def cart2milankovitch_tf(X, mu):

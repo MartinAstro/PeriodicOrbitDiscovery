@@ -83,13 +83,13 @@ def general_variable_time_bvp(T, x0, model):
 
         V_i = np.hstack((x_i, T_i))
         C = x_f - x_i
-        D = np.block([phi_t0_tf - np.eye(6), x_dot_f])
+        D = np.block([phi_t0_tf - np.eye(len(x0)), x_dot_f])
         V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        x_i_p1 = V_i_p1[0:6]
-        T_i_p1 = V_i_p1[6]
+        x_i_p1 = V_i_p1[0:len(x0)]
+        T_i_p1 = V_i_p1[len(x0)]
         
         tol = np.linalg.norm(C)
-        dx = np.linalg.norm((x_i_p1 - x_i)[0:6])
+        dx = np.linalg.norm((x_i_p1 - x_i)[0:len(x0)])
         print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
         k += 1
 
@@ -118,13 +118,13 @@ def general_variable_time_bvp_OE(T, x0, model):
 
         V_i = np.hstack((x_i, T_i))
         C = x_f - x_i
-        D = np.block([phi_t0_tf - np.eye(6), x_dot_f])
+        D = np.hstack([phi_t0_tf - np.eye(N), x_dot_f.reshape((N,-1))])
         V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        x_i_p1 = V_i_p1[0:6]
-        T_i_p1 = V_i_p1[6]
+        x_i_p1 = V_i_p1[0:N]
+        T_i_p1 = V_i_p1[N]
         
         tol = np.linalg.norm(C)
-        dx = np.linalg.norm((x_i_p1 - x_i)[0:6])
+        dx = np.linalg.norm((x_i_p1 - x_i)[:N])
         print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
         k += 1
 
