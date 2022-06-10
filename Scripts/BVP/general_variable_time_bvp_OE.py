@@ -8,7 +8,7 @@ import numpy as np
 from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.gravity_models import (pinnGravityModel,
                                          polyhedralGravityModel)
-from FrozenOrbits.LPE import LPE, LPE_Milankovitch
+from FrozenOrbits.LPE import LPE, LPE_Milankovitch, LPE_Milankovitch_ND
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import plot_3d_trajectory
 from GravNN.CelestialBodies.Asteroids import Eros
@@ -45,16 +45,22 @@ def main():
 
     configure_processing_layers(model)
 
-    lpe = LPE_Milankovitch(model.gravity_model, planet.mu)
+    # lpe = LPE_Milankovitch(model.gravity_model, planet.mu)
 
     OE_0, T = sample_mirror_orbit(planet.radius*3, planet.mu)
 
     # Run the solver
-    OE_0_sol, T_sol = general_variable_time_bvp_OE(T, OE_0, lpe)
+    # lpe = LPE_Milankovitch(model.gravity_model, planet.mu)
+    # OE_0_sol, T_sol = general_variable_time_bvp_OE(T, OE_0, lpe)
+
+    lpe = LPE_Milankovitch_ND(model.gravity_model, planet.mu)
+    OE_0_sol, T_sol = general_variable_time_bvp_OE_ND(T, OE_0, lpe)
 
 
-    x_0 = oe2cart_tf(OE_0, planet.mu, 'milankovitch').numpy()
-    x_0_sol = oe2cart_tf(OE_0_sol, planet.mu, 'milankovitch').numpy()
+    R_0, V_0 = oe2cart_tf(OE_0, planet.mu, 'milankovitch')
+    x_0 = np.hstack((R_0.numpy(), V_0.numpy()))[0]
+    R_0_sol, R_0_sol = oe2cart_tf(OE_0_sol, planet.mu, 'milankovitch')
+    x_0_sol = np.hstack((R_0_sol.numpy(), R_0_sol.numpy()))[0]
 
     # propagate the initial and solution orbits
     init_sol = propagate_orbit(T, x_0, model, tol=1E-8) 

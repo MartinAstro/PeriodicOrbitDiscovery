@@ -129,3 +129,44 @@ def general_variable_time_bvp_OE(T, x0, model):
         k += 1
 
     return x_i_p1, T_i_p1
+
+def general_variable_time_bvp_OE_ND(T, x0, model):
+    T = model.non_dimensionalize_time(T).numpy()
+    x0 = model.non_dimensionalize_state(x0).numpy()
+
+    T_i_p1 = copy.deepcopy(T) 
+    x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
+
+    k = 0
+    tol = 1
+    while tol > 1E-6 and k < 1: 
+        start_time = time.time()
+        T_i = copy.deepcopy(T_i_p1)
+        x_i = copy.deepcopy(x_i_p1)
+        N = len(x_i)
+        phi_0 = np.identity(N)
+        z_i = np.hstack((x_i.reshape((-1,)), phi_0.reshape((-1))))
+
+        sol = solve_ivp(dynamics_w_STM_OE, [0, T_i], z_i, args=(model,),atol=1E-3, rtol=1E-3)
+        z_f = sol.y[:,-1]
+        x_f = z_f[:N]
+
+        x_dot_f = model.dOE_dt(x_f)
+        phi_t0_tf = z_f[N:].reshape((N,N))
+
+        V_i = np.hstack((x_i, T_i))
+        C = x_f - x_i
+        D = np.hstack([phi_t0_tf - np.eye(N), x_dot_f.reshape((N,-1))])
+        V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
+        x_i_p1 = V_i_p1[0:N]
+        T_i_p1 = V_i_p1[N]
+        
+        tol = np.linalg.norm(C)
+        dx = np.linalg.norm((x_i_p1 - x_i)[:N])
+        print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
+        k += 1
+
+    T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
+    x_i_p1 = model.dimensionalize_state(np.array([x_i_p1])).numpy()
+
+    return x_i_p1, T_i_p1

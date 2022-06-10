@@ -36,4 +36,5 @@ def dynamics_w_STM_OE(t, z, lpe):
     phi_dot = dOEdt_dOE@phi
     
     z_dot = np.hstack((dOEdt, phi_dot.reshape(-1)))
+    print(t)
     return z_dot
