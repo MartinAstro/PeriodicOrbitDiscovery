@@ -2,9 +2,124 @@ from FrozenOrbits.coordinate_transforms import *
 import tensorflow as tf
 import numpy as np
 
+
+
 def element_dot(a,b):
     # what once was np.dot
     return tf.reshape(tf.reduce_sum(a * b,axis=1),((-1,1)))
+
+class LPE_Milankovitch():
+    def __init__(self, model, mu):
+        self.model = model
+        self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
+        # self.init_OE = self.get_init_OE()
+    
+    def dOE_dt(self,mil_OE): 
+        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
+        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_results = self.dOE_milankovitch_dt(mil_OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()
+
+    def dOE_dt_dx(self,mil_OE): 
+        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
+        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_dx_results = self.dOE_milankovitch_dt_dx(mil_OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()
+
+
+    def generate_potential(self,x):
+        """
+        Very silly function, but it's the only way to compile dOE_milankovitch_dt_dx as a tf.function().
+        In short, tf.function is unable to accept the model as an argument without constant retracing
+        according to: https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        return self.model.generate_potential_tf(x)
+
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64), tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_milankovitch_dt_dx(self, milankovitch_OE, mu): 
+        print("Retracing")
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+        with tf.GradientTape(persistent=True) as tape_dx:
+            tape_dx.watch(milankovitch_OE)
+            with tf.GradientTape(persistent=True) as tape:
+                tape.watch(milankovitch_OE) 
+                r,v = milankovitch2cart_tf(milankovitch_OE, mu)
+                u_pred = self.generate_potential(r)
+            dUdOE = tape.gradient(u_pred, milankovitch_OE)
+
+            dUdH = dUdOE[:,0:3]
+            dUde = dUdOE[:,3:6]
+            dUdl = dUdOE[:,6]
+
+            H_mag = tf.norm(H)
+            e_mag = tf.norm(e)
+            r_mag = tf.norm(r)
+
+            multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
+            z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
+            rVec = r
+            
+            HVec = H
+            eVec = e
+            LVal = tf.reshape(L,(-1,1))
+            
+            r_hat = rVec/r_mag
+            term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
+            term2 = (1.0-e_mag**2)/H_mag**2
+            term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
+            term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
+
+            H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl # good
+            e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
+            L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+
+            dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)  
+        dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE, experimental_use_pfor=False)
+        return dOE_dt_dx[0]
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64),tf.TensorSpec(shape=None, dtype=tf.float64)])
+    def dOE_milankovitch_dt(self, milankovitch_OE, mu): 
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(milankovitch_OE) 
+            r,v = milankovitch2cart_tf(milankovitch_OE, mu)
+            u_pred = self.generate_potential(r)
+        dUdOE = tape.gradient(u_pred, milankovitch_OE)
+
+        dUdH = dUdOE[:,0:3]
+        dUde = dUdOE[:,3:6]
+        dUdl = dUdOE[:,6]
+
+        H_mag = tf.norm(H)
+        e_mag = tf.norm(e)
+        r_mag = tf.norm(r)
+
+        multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
+        z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
+        rVec = r
+        
+        HVec = H
+        eVec = e
+        LVal = tf.reshape(L,(-1,1))
+        
+        r_hat = rVec/r_mag
+        term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
+        term2 = (1.0-e_mag**2)/H_mag**2
+        term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
+        term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
+
+        H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl # good
+        e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
+        L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+
+        dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)    
+
+        return dOE_dt[0]
 
 class LPE_Milankovitch_ND():
     def __init__(self, model, mu):
@@ -143,122 +258,230 @@ class LPE_Milankovitch_ND():
 
         return dOE_dt[0]
 
-
-
-class LPE_Milankovitch():
+class LPE_Traditional():
     def __init__(self, model, mu):
         self.model = model
         self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
         # self.init_OE = self.get_init_OE()
     
-    def dOE_dt(self,mil_OE): 
-        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
-        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
-        dOE_dt_results = self.dOE_milankovitch_dt(mil_OE_input_tf, self.mu)
-        return dOE_dt_results.numpy()
+    def dOE_dt(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_results = self.dOE_trad_dt(OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()[0]
 
-    def dOE_dt_dx(self,mil_OE): 
-        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
-        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
-        dOE_dt_dx_results = self.dOE_milankovitch_dt_dx(mil_OE_input_tf, self.mu)
-        return dOE_dt_dx_results.numpy()
+    def dOE_dt_dx(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_dx_results = self.dOE_trad_dt_dx(OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()[0]
 
 
     def generate_potential(self,x):
         """
-        Very silly function, but it's the only way to compile dOE_milankovitch_dt_dx as a tf.function().
+        Very silly function, but it's the only way to compile dOE_dt_dx as a tf.function().
         In short, tf.function is unable to accept the model as an argument without constant retracing
         according to: https://github.com/tensorflow/tensorflow/issues/38875
         """
         return self.model.generate_potential_tf(x)
 
+    def _conditional_compute_b(self, OE):
+        a = OE[0]
+        e = OE[1]
+        b = tf.cond(tf.greater_equal(tf.abs(e),1), lambda: a*tf.sqrt(e**2-1.), lambda: a*tf.sqrt(1.-e**2))
+        return b
 
-    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64), tf.TensorSpec(shape=(), dtype=tf.float64)])
-    def dOE_milankovitch_dt_dx(self, milankovitch_OE, mu): 
-        print("Retracing")
-        H = milankovitch_OE[:, 0:3]
-        e = milankovitch_OE[:, 3:6]
-        L = milankovitch_OE[:, 6]
-        with tf.GradientTape(persistent=True) as tape_dx:
-            tape_dx.watch(milankovitch_OE)
-            with tf.GradientTape(persistent=True) as tape:
-                tape.watch(milankovitch_OE) 
-                r,v = milankovitch2cart_tf(milankovitch_OE, mu)
-                u_pred = self.generate_potential(r)
-            dUdOE = tape.gradient(u_pred, milankovitch_OE)
+    def _conditional_compute_n(self, a):
+        n = tf.cond(tf.greater_equal(a,0), lambda: tf.sqrt(self.mu/a**3), lambda: tf.sqrt(-self.mu/a**3))
+        return n
 
-            dUdH = dUdOE[:,0:3]
-            dUde = dUdOE[:,3:6]
-            dUdl = dUdOE[:,6]
+    def _compute_b(self, OE):
+        b = tf.map_fn(fn= lambda OE : self._conditional_compute_b(OE), elems=OE)
+        return b 
 
-            H_mag = tf.norm(H)
-            e_mag = tf.norm(e)
-            r_mag = tf.norm(r)
+    def _compute_n(self, a):
+        n = tf.map_fn(fn= lambda a : self._conditional_compute_n(a), elems=(a))
+        return n 
 
-            multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
-            z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
-            rVec = r
-            
-            HVec = H
-            eVec = e
-            LVal = tf.reshape(L,(-1,1))
-            
-            r_hat = rVec/r_mag
-            term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
-            term2 = (1.0-e_mag**2)/H_mag**2
-            term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
-            term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
 
-            H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl # good
-            e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
-            L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
-
-            dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)  
-        dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE, experimental_use_pfor=False)
-        return dOE_dt_dx[0]
-
-    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64),tf.TensorSpec(shape=None, dtype=tf.float64)])
-    def dOE_milankovitch_dt(self, milankovitch_OE, mu): 
-        H = milankovitch_OE[:, 0:3]
-        e = milankovitch_OE[:, 3:6]
-        L = milankovitch_OE[:, 6]
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_trad_dt(self, OE, mu): 
         with tf.GradientTape(persistent=True) as tape:
-            tape.watch(milankovitch_OE) 
-            r,v = milankovitch2cart_tf(milankovitch_OE, mu)
+            tape.watch(OE) 
+            r,v = oe2cart_tf(OE, mu)
             u_pred = self.generate_potential(r)
-        dUdOE = tape.gradient(u_pred, milankovitch_OE)
-
-        dUdH = dUdOE[:,0:3]
-        dUde = dUdOE[:,3:6]
-        dUdl = dUdOE[:,6]
-
-        H_mag = tf.norm(H)
-        e_mag = tf.norm(e)
-        r_mag = tf.norm(r)
-
-        multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
-        z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
-        rVec = r
+        dUdOE = tape.gradient(u_pred, OE)
         
-        HVec = H
-        eVec = e
-        LVal = tf.reshape(L,(-1,1))
+        a = OE[:,0]
+        e = OE[:,1]
+        i = OE[:,2] # transpose necessary to assign
+
+        b = self._compute_b(OE)
+        n = self._compute_n(a)
+
+        dadt = 2.0/(n*a) * dUdOE[:,5]
+        dedt = -b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5]
+        didt = -1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3]
+        domegadt = -tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1]
+        dOmegadt = 1.0/(n*a*b*tf.sin(i))*dUdOE[:,2]
+        dMdt = n - 2.0/(n*a)*dUdOE[:,0] - (1-e**2)/(n*a**2*e)*dUdOE[:,1] #https://www.sciencedirect.com/topics/engineering/orbital-element -- Orbital Mechanics and Formation Flying 
         
-        r_hat = rVec/r_mag
-        term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))#
-        term2 = (1.0-e_mag**2)/H_mag**2
-        term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
-        term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec))) 
+        dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
 
-        H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl # good
-        e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
-        L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+        return dOE_dt
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_trad_dt_dx(self, OE, mu): 
+        """For some reason, cannot use self.dOE_trad_dt() within this function, but instead the whole 
+        contents must be copied instead."""
+        print("Retracing")
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(OE)
+            with tf.GradientTape(persistent=True) as tape_dt:
+                tape_dt.watch(OE) 
+                r,v = oe2cart_tf(OE, mu)
+                u_pred = self.generate_potential(r)
+            dUdOE = tape_dt.gradient(u_pred, OE)
+            
+            a = OE[:,0]
+            e = OE[:,1]
+            i = OE[:,2] # transpose necessary to assign
 
-        dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)    
+            b = self._compute_b(OE)
+            n = self._compute_n(a)
 
-        return dOE_dt[0]
+            dadt = 2.0/(n*a) * dUdOE[:,5]
+            dedt = -b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5]
+            didt = -1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3]
+            domegadt = -tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1]
+            dOmegadt = 1.0/(n*a*b*tf.sin(i))*dUdOE[:,2]
+            dMdt = n - 2.0/(n*a)*dUdOE[:,0] - (1-e**2)/(n*a**2*e)*dUdOE[:,1] #https://www.sciencedirect.com/topics/engineering/orbital-element -- Orbital Mechanics and Formation Flying 
+            
+            dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
+        dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)
+        return dOE_dt_dx
+
+class LPE_Traditional_ND():
+    def __init__(self, model, mu, l_star):
+        self.model = model
+        self.l_star = tf.constant(l_star, dtype=tf.float64, name='ref_length')
+        self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
+    
+    def non_dimensionalize_state(self, x0):
+        a = tf.reshape(1.0/self.l_star*x0[:,0],(1,1))
+        trad_OE_ND = tf.concat([a, x0[:,1:]], axis=1)
+        return trad_OE_ND
+
+    def dimensionalize_state(self, x0):
+        a_tilde = tf.reshape(self.l_star*x0[:,0],(1,1))
+        trad_OE = tf.concat([a_tilde, x0[:,1:]], axis=1)
+        return trad_OE
+
+    def non_dimensionalize_time(self, T):
+        T_ND = T
+        return T_ND
+
+    def dimensionalize_time(self, T):
+        T = T
+        return T
+
+    def dOE_dt(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_results = self.dOE_trad_dt(OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()[0]
+
+    def dOE_dt_dx(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_dx_results = self.dOE_trad_dt_dx(OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()[0]
 
 
+    def generate_potential(self,x):
+        """
+        Very silly function, but it's the only way to compile dOE_dt_dx as a tf.function().
+        In short, tf.function is unable to accept the model as an argument without constant retracing
+        according to: https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        return self.model.generate_potential_tf(x)
+
+    def _conditional_compute_b(self, OE):
+        a = OE[0]
+        e = OE[1]
+        b = tf.cond(tf.greater_equal(tf.abs(e),1), lambda: a*tf.sqrt(e**2-1.), lambda: a*tf.sqrt(1.-e**2))
+        return b
+
+    def _conditional_compute_n(self, a):
+        n = tf.cond(tf.greater_equal(a,0), lambda: tf.sqrt(self.mu/a**3), lambda: tf.sqrt(-self.mu/a**3))
+        return n
+
+    def _compute_b(self, OE):
+        b = tf.map_fn(fn= lambda OE : self._conditional_compute_b(OE), elems=OE)
+        return b 
+
+    def _compute_n(self, a):
+        n = tf.map_fn(fn= lambda a : self._conditional_compute_n(a), elems=(a))
+        return n 
+
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_trad_dt(self, OE, mu): 
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(OE) 
+            trad_OE_dim = self.dimensionalize_state(OE)
+            r,v = oe2cart_tf(trad_OE_dim, mu)
+            u_pred = self.generate_potential(r)
+        dUdOE = tape.gradient(u_pred, OE)
+        
+        a = OE[:,0]
+        e = OE[:,1]
+        i = OE[:,2] # transpose necessary to assign
+
+        b = self._compute_b(OE)
+        n = self._compute_n(a*self.l_star)           
+
+        dadt = (1.0/self.l_star**2)*(2.0/(n*a) * dUdOE[:,5])
+        dedt = (1.0/self.l_star**2)*(-b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5])
+        didt = (1.0/self.l_star**2)*(-1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
+        domegadt = (1.0/self.l_star**2)*(-tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1])
+        dOmegadt = (1.0/self.l_star**2)*(1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
+        dMdt = n - (1.0/self.l_star**2)*(2.0/(n*a)*dUdOE[:,0] + (1-e**2)/(n*a**2*e)*dUdOE[:,1]) #https://www.sciencedirect.com/topics/engineering/orbital-element -- Orbital Mechanics and Formation Flying 
+        
+        dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
+
+        return dOE_dt
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_trad_dt_dx(self, OE, mu): 
+        """For some reason, cannot use self.dOE_trad_dt() within this function, but instead the whole 
+        contents must be copied instead."""
+        print("Retracing")
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(OE)
+            with tf.GradientTape(persistent=True) as tape_dt:
+                tape_dt.watch(OE) 
+                trad_OE_dim = self.dimensionalize_state(OE)
+                r,v = oe2cart_tf(trad_OE_dim, mu)
+                u_pred = self.generate_potential(r)
+            dUdOE = tape_dt.gradient(u_pred, OE)
+            
+            a = OE[:,0]
+            e = OE[:,1]
+            i = OE[:,2] # transpose necessary to assign
+
+            b = self._compute_b(OE)
+            n = self._compute_n(a*self.l_star)           
+
+            dadt = (1.0/self.l_star**2)*(2.0/(n*a) * dUdOE[:,5])
+            dedt = (1.0/self.l_star**2)*(-b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5])
+            didt = (1.0/self.l_star**2)*(-1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
+            domegadt = (1.0/self.l_star**2)*(-tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1])
+            dOmegadt = (1.0/self.l_star**2)*(1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
+            dMdt = n - (1.0/self.l_star**2)*(2.0/(n*a)*dUdOE[:,0] + (1-e**2)/(n*a**2*e)*dUdOE[:,1]) #https://www.sciencedirect.com/topics/engineering/orbital-element -- Orbital Mechanics and Formation Flying 
+            dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
+        dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)
+        return dOE_dt_dx
 
 
 class LPE():
