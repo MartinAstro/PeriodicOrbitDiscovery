@@ -1,6 +1,7 @@
 
 from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.coordinate_transforms import *
+from FrozenOrbits.constraints import *
 from FrozenOrbits.LPE import LPE
 
 import numpy as np
@@ -235,6 +236,7 @@ def general_variable_time_bvp_trad_OE(T, x0, model):
 def general_variable_time_bvp_trad_OE_ND(T, x0_dim, model):
 
     x0 = model.non_dimensionalize_state(x0_dim).numpy()
+    T = model.non_dimensionalize_time(T).numpy()
     print(f"Total Time {T} \n Dim State {x0_dim} \n Non Dim State {x0}")
     T_i_p1 = copy.deepcopy(T) 
     x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
@@ -249,65 +251,32 @@ def general_variable_time_bvp_trad_OE_ND(T, x0_dim, model):
         phi_0 = np.identity(N)
         z_i = np.hstack((x_i.reshape((-1,)), phi_0.reshape((-1))))
 
-        sol = solve_ivp(dynamics_w_STM_OE, [0, T_i], z_i, args=(model,),atol=1E-1, rtol=1E-1)
+        sol = solve_ivp(dynamics_w_STM_OE, 
+                        [0, T_i],
+                        z_i,
+                        args=(model,),
+                        atol=1E-3, rtol=1E-3)
         print(f"{sol.success} \t {sol.message}")
         z_f = sol.y[:,-1]
         x_f = z_f[:N]
 
         x_dot_f = model.dOE_dt(x_f)
         phi_t0_tf = z_f[N:].reshape((N,N))
-
-        # The entire state 
-        # V_i = np.hstack((x_i, T_i))
-        # C = x_f - x_i # F(V) in pdf
-        # D = np.hstack([phi_t0_tf - np.eye(N), x_dot_f.reshape((N,-1))])
-
-        # V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        # x_i_p1 = V_i_p1[0:N]
-        # T_i_p1 = V_i_p1[N]
-
-        # Option 1: Remove a variable from the state
-        # Removing mean anomaly from the state (doesn't matter where on the orbit it is)
-        # M = 5
-        # V_i = np.hstack((x_i[:M], T_i))
-        # C = C[:M]
-        # D_original = np.hstack([phi_t0_tf - np.eye(N), x_dot_f.reshape((N,-1))])
-        # D = np.hstack((D_original[:M, :M], D_original[:M,-1:]))
-
-        # V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        # x_i_p1 = V_i_p1[:M]
-        # T_i_p1 = V_i_p1[-1]
-
-        # Option 2: Remove a variable from the state
-        # Remove the period from the state.
-
-        # V_i = x_i
-        # C = x_f - x_i
-        # D = phi_t0_tf - np.eye(N)
-
-        # V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        # x_i_p1 = V_i_p1
-        # T_i_p1 = T_i
-
-        # Option 3: Remove a variable from the state
-        # Remove the period and mean anomaly from the state.
         
-        M = 5
-        V_i = x_i[:M]
-        C = (x_f - x_i)[:M]
-        D_original = phi_t0_tf - np.eye(N)
-        D = D_original[:M, :M]
+        # x_i_p1, T_i_p1 = OE_wo_a_e_i(z_f, x_i, x_i_p1, 
+        #                                 T_i, start_time, model, k)
+       
+        # x_i_p1, T_i_p1 = OE_wo_a_e_i__w_T(z_f, x_i, x_i_p1, 
+        #                                 T_i, start_time, model, k)
+       
+        x_i_p1, T_i_p1 = OE_wo_a_e_i__w_T_inv(z_f, x_i, x_i_p1, 
+                                        T_i, start_time, model, k)
 
-        V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
-        x_i_p1[:M] = V_i_p1
-        T_i_p1 = T_i
 
-        tol = np.linalg.norm(C)
-        dx = np.linalg.norm((x_i_p1 - x_i)[:N])
-        print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
         k += 1
 
     x_i_p1 = model.dimensionalize_state(np.array([x_i_p1])).numpy()
+    T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
 
     return x_i_p1, T_i_p1
 
