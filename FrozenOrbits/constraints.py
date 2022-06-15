@@ -1,6 +1,15 @@
 import numpy as np
 import time
 
+
+def print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1):
+    tol = np.linalg.norm(C)
+    dx = np.linalg.norm((x_i_p1 - x_i))
+    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
+    print(f"Old Non-Dim State: {x_i}")
+    print(f"{dV}")
+    print(f"New Non-Dim State: {x_i_p1}")
+
 def OE(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     N = len(x_i)
     x_f = z_f[:N]
@@ -17,12 +26,7 @@ def OE(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1 = V_i_p1[0:N]
     T_i_p1 = V_i_p1[N]
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_M(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -43,12 +47,7 @@ def OE_wo_M(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1 = V_i_p1[:M]
     T_i_p1 = V_i_p1[-1]
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -67,12 +66,7 @@ def OE_wo_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1 = V_i_p1
     T_i_p1 = T_i
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_M_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -93,12 +87,7 @@ def OE_wo_M_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1[:M] = V_i_p1
     T_i_p1 = T_i
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_semimajor(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -118,12 +107,7 @@ def OE_wo_semimajor(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1[1:] = V_i_p1
     T_i_p1 = T_i
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_a_e_i(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -143,12 +127,7 @@ def OE_wo_a_e_i(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1[3:] = V_i_p1
     T_i_p1 = T_i
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
 
 def OE_wo_a_e_i__w_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
@@ -173,19 +152,12 @@ def OE_wo_a_e_i__w_T(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1[3:] = V_i_p1[0:3]
     T_i_p1 = V_i_p1[-1]
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1
-
 
 def OE_wo_a_e_i__w_T_inv(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     N = len(x_i)
     x_f = z_f[:N]
-
     x_dot_f = model.dOE_dt(x_f)
     phi_t0_tf = z_f[N:].reshape((N,N))
 
@@ -202,10 +174,5 @@ def OE_wo_a_e_i__w_T_inv(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     x_i_p1[3:] = V_i_p1[0:3]
     T_i_p1 = V_i_p1[-1]
 
-    tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1)
     return x_i_p1, T_i_p1

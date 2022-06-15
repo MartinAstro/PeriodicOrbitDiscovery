@@ -3,7 +3,7 @@ from FrozenOrbits.coordinate_transforms import cart2oe_tf
 
 
 from scipy.fft import fftn, ifftn
-from FrozenOrbits.dynamics import dynamics_ivp
+from FrozenOrbits.dynamics import dynamics_cart
 import os
 import trimesh
 import GravNN
@@ -210,7 +210,7 @@ def get_solution_metrics(results, sol):
     return bc_pos_diff, pos_diff, vel_diff
 
 def propagate_orbit(T, x_0, model, tol=1E-12):
-    sol = solve_ivp(dynamics_ivp, 
+    sol = solve_ivp(dynamics_cart, 
                     [0, T], 
                     x_0, 
                     args=(model,),
