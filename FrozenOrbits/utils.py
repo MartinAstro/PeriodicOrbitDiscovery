@@ -1,3 +1,4 @@
+from tkinter.ttk import Progressbar
 import numpy as np
 from FrozenOrbits.coordinate_transforms import cart2oe_tf
 
@@ -12,6 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import OrbitalElements.orbitalPlotting as op
 from GravNN.CelestialBodies.Asteroids import Eros
+from GravNN.Support.ProgressBar import ProgressBar
 from scipy.integrate import solve_ivp
 class Solution:
     def __init__(self, y, t):
@@ -210,10 +212,12 @@ def get_solution_metrics(results, sol):
     return bc_pos_diff, pos_diff, vel_diff
 
 def propagate_orbit(T, x_0, model, tol=1E-12):
+    pbar = ProgressBar(T, enable=True)
     sol = solve_ivp(dynamics_cart, 
                     [0, T], 
                     x_0, 
-                    args=(model,),
+                    args=(model, pbar),
                     atol=tol, rtol=tol, 
                     t_eval=np.linspace(0, T, 100))
+    pbar.close()
     return sol

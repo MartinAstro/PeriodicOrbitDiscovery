@@ -1,8 +1,11 @@
 from GravNN.Support.transformations import cart2sph, invert_projection, project_acceleration
 from GravNN.GravityModels.Polyhedral import Polyhedral
 from GravNN.Networks.Model import load_config_and_model
+from GravNN.Networks.Layers import PreprocessingLayer, PostprocessingLayer
+
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 class ExtFloat:
     def __init__(self,value):
@@ -41,12 +44,12 @@ class polyhedralGravityModel():
     def generate_acceleration(self, X):
         X = np.array(X).reshape((-1,3))
         a = self.poly_model.compute_acceleration(positions=X, pbar=False)
-        return a
+        return a.squeeze()
 
     def generate_potential(self, X):
         X = np.array(X).reshape((-1,3))
         u = self.poly_model.compute_potential(positions=X)
-        return u
+        return u.squeeze()
 
 
 class pinnGravityModel():
@@ -62,6 +65,16 @@ class pinnGravityModel():
             self.removed_pm = True
         else:
             self.removed_pm = False
+
+        # configure preprocessing layers
+        x_transformer = config['x_transformer'][0]
+        u_transformer = config['u_transformer'][0]
+
+        x_preprocessor = PreprocessingLayer(x_transformer.min_, x_transformer.scale_, tf.float64)
+        u_postprocessor = PostprocessingLayer(u_transformer.min_, u_transformer.scale_, tf.float64)
+
+        self.gravity_model.x_preprocessor = x_preprocessor
+        self.gravity_model.u_postprocessor = u_postprocessor
 
     def generate_acceleration(self, X):
         R = np.array(X).reshape((-1,3)).astype(np.float32)
@@ -92,5 +105,5 @@ class pinnGravityModel():
         else:
             r = np.linalg.norm(R, axis=1)
             U_pm = np.zeros((len(R), 1))
-            U_pm = -self.planet.mu/r
+            U_pm[:,0] = -self.planet.mu/r
             return (U_pm + U_model).squeeze()

@@ -13,6 +13,7 @@ from FrozenOrbits.dynamics import *
 from GravNN.Support.transformations import cart2sph, invert_projection
 from scipy.integrate import solve_ivp
 from scipy.optimize import least_squares, root
+from GravNN.Support.ProgressBar import ProgressBar
 
 
 
@@ -29,8 +30,9 @@ def variable_time_mirror_bvp(T, x0, model):
         N = len(x_i)
         phi_0 = np.identity(N)
         z_i = np.hstack((x_i, phi_0.reshape((-1))))
-
-        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,),atol=1E-6, rtol=1E-6)
+        pbar = ProgressBar(T_i, enable=True)
+        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,pbar),atol=1E-6, rtol=1E-6)
+        pbar.close()
         z_f = sol.y[:,-1]
         x_f = z_f[:N]
 
@@ -71,8 +73,9 @@ def general_variable_time_bvp(T, x0, model):
         N = len(x_i)
         phi_0 = np.identity(N)
         z_i = np.hstack((x_i, phi_0.reshape((-1))))
-
-        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,),atol=1E-6, rtol=1E-6)
+        pbar = ProgressBar(T_i, enable=True)
+        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,pbar),atol=1E-6, rtol=1E-6)
+        pbar.close()
         z_f = sol.y[:,-1]
         x_f = z_f[:N]
 
@@ -113,12 +116,13 @@ def general_variable_time_bvp_trad_OE(T, x0_dim, model, constraint):
         N = len(x_i)
         phi_0 = np.identity(N)
         z_i = np.hstack((x_i.reshape((-1,)), phi_0.reshape((-1))))
-
+        pbar = ProgressBar(T_i, enable=True)
         sol = solve_ivp(dynamics_OE_w_STM, 
                         [0, T_i],
                         z_i,
-                        args=(model,),
+                        args=(model,pbar),
                         atol=1E-3, rtol=1E-3)
+        pbar.close()
         print(f"{sol.success} \t {sol.message}")
         z_f = sol.y[:,-1]
         x_i_p1, T_i_p1 = constraint(z_f, x_i, x_i_p1, 
@@ -137,13 +141,14 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T, x0_dim, model):
     print(f"Total Time {T} \n Dim State {x0_dim} \n Non Dim State {x0}")
     T_i_p1 = copy.deepcopy(T) 
     x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
-
     def F(x, T, model):
+        pbar = ProgressBar(T, enable=True)
         sol = solve_ivp(dynamics_OE, 
                 [0, T],
                 x,
-                args=(model,),
-                atol=1E-10, rtol=1E-10)
+                args=(model, pbar),
+                atol=1E-7, rtol=1E-7)
+        pbar.close()
         dx = sol.y[:,-1] - x # return R^6 where m = 6
         dx[5] = dx[5] % 2*np.pi
         # dx[0:3] *= 100
@@ -155,14 +160,16 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T, x0_dim, model):
         return dx
 
     def jac(x, T, model):
+        pbar = ProgressBar(T, enable=True)
         N = len(x)
         phi_0 = np.identity(N)
         z_i = np.hstack((x.reshape((-1,)), phi_0.reshape((-1))))
         sol = solve_ivp(dynamics_OE_w_STM, 
                         [0, T],
                         z_i,
-                        args=(model,),
-                        atol=1E-10, rtol=1E-10)
+                        args=(model,pbar),
+                        atol=1E-7, rtol=1E-7)
+        pbar.close()
         z_f = sol.y[:,-1]
         phi_ti_t0 = np.reshape(z_f[N:], (N,N))
         D = phi_ti_t0 - np.eye(N)

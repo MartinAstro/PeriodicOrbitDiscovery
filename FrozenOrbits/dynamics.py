@@ -1,11 +1,12 @@
 import numpy as np
-def dynamics_cart(t, x, model): 
-    print(t)
-    a = model.generate_acceleration(x[0:3].reshape((1, -1)))
+def dynamics_cart(t, x, model, pbar): 
+    r = x[0:3].reshape((1, -1))
+    a = model.generate_acceleration(r)
     f_dot = np.hstack((x[3:], a))
+    pbar.update(t)
     return f_dot
 
-def dynamics_cart_w_STM(t, z, model): 
+def dynamics_cart_w_STM(t, z, model, pbar): 
     N = int(1/2 * (np.sqrt(4*len(z) + 1) - 1))
     
     r = z[:3].reshape((1,-1))
@@ -24,14 +25,16 @@ def dynamics_cart_w_STM(t, z, model):
     phi_dot = dfdx@phi
     
     z_dot = np.hstack((x_dot, phi_dot.reshape(-1)))
+    pbar.update(t)
     return z_dot
 
-def dynamics_OE(t, x, lpe): 
+def dynamics_OE(t, x, lpe, pbar): 
     OE = x
     dOEdt = lpe.dOE_dt(OE)
+    pbar.update(t)
     return dOEdt
 
-def dynamics_OE_w_STM(t, z, lpe): 
+def dynamics_OE_w_STM(t, z, lpe, pbar): 
     N = int(1/2 * (np.sqrt(4*len(z) + 1) - 1))
     OE = z[:N]
     dOEdt = lpe.dOE_dt(OE)
@@ -41,5 +44,5 @@ def dynamics_OE_w_STM(t, z, lpe):
     phi_dot = dOEdt_dOE@phi
     
     z_dot = np.hstack((dOEdt, phi_dot.reshape(-1)))
-    print(t)
+    pbar.update(t)
     return z_dot

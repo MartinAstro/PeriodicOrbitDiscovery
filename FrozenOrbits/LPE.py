@@ -222,8 +222,8 @@ class LPE_Milankovitch():
                 tape.watch(milankovitch_OE) 
                 mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
                 r,v = milankovitch2cart_tf(mil_OE_dim, mu)
-                U_tilde = self.generate_potential(r)
-                U = (self.t_star/self.l_star)**2*U_tilde
+                u_pred_tilde = self.generate_potential(r)
+                U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
             dUdOE = tape.gradient(U, milankovitch_OE)
 
             dUdH = dUdOE[:,0:3]
@@ -248,9 +248,9 @@ class LPE_Milankovitch():
             term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
             term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec)))
 
-            H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl
-            e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
-            L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+            H_dt = (1.0/self.m_star)*(tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl)
+            e_dt = (1.0/self.m_star)*(tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl)
+            L_dt = (1.0/self.m_star)*(-element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + H_mag/r_mag**2 
 
             dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)  
         dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE, experimental_use_pfor=False)
@@ -265,8 +265,8 @@ class LPE_Milankovitch():
             tape.watch(milankovitch_OE) 
             mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
             r,v = milankovitch2cart_tf(mil_OE_dim, mu)
-            U_tilde = self.generate_potential(r)
-            U = (self.t_star/self.l_star)**2*U_tilde
+            u_pred_tilde = self.generate_potential(r)
+            U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
         dUdOE = tape.gradient(U, milankovitch_OE)
 
         dUdH = dUdOE[:,0:3]
@@ -291,9 +291,9 @@ class LPE_Milankovitch():
         term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
         term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec)))
 
-        H_dt = tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl
-        e_dt = tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl
-        L_dt = -element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde) + H_mag/r_mag**2 
+        H_dt = (1.0/self.m_star)*(tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl)
+        e_dt = (1.0/self.m_star)*(tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl)
+        L_dt = (1.0/self.m_star)*(-element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + H_mag/r_mag**2 
 
         dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)      
 
