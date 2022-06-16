@@ -221,3 +221,8 @@ def propagate_orbit(T, x_0, model, tol=1E-12):
                     t_eval=np.linspace(0, T, 100))
     pbar.close()
     return sol
+
+def calc_angle_diff(theta_0, theta_f):
+    #https://stackoverflow.com/questions/1878907/how-can-i-find-the-difference-between-two-angles -- not the top answer
+    d_theta = np.arctan2(np.sin(theta_f-theta_0), np.cos(theta_f-theta_0))
+    return d_theta
