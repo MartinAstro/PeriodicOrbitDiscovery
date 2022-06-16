@@ -248,9 +248,18 @@ class LPE_Milankovitch():
             term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
             term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec)))
 
-            H_dt = (1.0/self.m_star)*(tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl)
-            e_dt = (1.0/self.m_star)*(tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl)
-            L_dt = (1.0/self.m_star)*(-element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + H_mag/r_mag**2 
+            H_dt = (1.0/self.m_star)*(
+                    tf.linalg.cross(HVec, dUdH) + 
+                    tf.linalg.cross(eVec, dUde) + 
+                    term1*dUdl)
+            e_dt = (1.0/self.m_star)*(
+                    tf.linalg.cross(eVec, dUdH) + 
+                    term2*tf.linalg.cross(HVec,dUde) + 
+                    (1.0/H_mag)*(term3 - term4*HVec)*dUdl)
+            L_dt = (1.0/self.m_star)*(
+                    -element_dot(term1,dUdH) - 
+                    1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + \
+                    (1/self.t_star)*H_mag/r_mag**2 
 
             dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)  
         dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE, experimental_use_pfor=False)
@@ -291,9 +300,18 @@ class LPE_Milankovitch():
         term3 = (2.0 + element_dot(r_hat, eVec))*r_hat + eVec
         term4 = element_dot(z_hat, eVec)/(H_mag*(H_mag + element_dot(z_hat, HVec)))
 
-        H_dt = (1.0/self.m_star)*(tf.linalg.cross(HVec, dUdH) + tf.linalg.cross(eVec, dUde) + term1*dUdl)
-        e_dt = (1.0/self.m_star)*(tf.linalg.cross(eVec, dUdH) + term2*tf.linalg.cross(HVec,dUde) + 1.0/H_mag*(term3 - term4*HVec)*dUdl)
-        L_dt = (1.0/self.m_star)*(-element_dot(term1,dUdH) - 1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + H_mag/r_mag**2 
+        H_dt = (1.0/self.m_star)*(
+                tf.linalg.cross(HVec, dUdH) + 
+                tf.linalg.cross(eVec, dUde) + 
+                term1*dUdl)
+        e_dt = (1.0/self.m_star)*(
+                tf.linalg.cross(eVec, dUdH) + 
+                term2*tf.linalg.cross(HVec,dUde) + 
+                (1.0/H_mag)*(term3 - term4*HVec)*dUdl)
+        L_dt = (1.0/self.m_star)*(
+                -element_dot(term1,dUdH) - 
+                1.0/H_mag*element_dot((term3 - term4*HVec), dUde)) + \
+                (1/self.t_star)*H_mag/r_mag**2 
 
         dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)      
 
@@ -314,7 +332,7 @@ class LPE_Traditional():
         return trad_OE_ND
 
     def dimensionalize_state(self, x0):
-        a_tilde = tf.reshape(self.l_star*x0[:,0],(1,1))
+        a_tilde = tf.reshape(self.l_star*x0[:,0],(-1,1))
         trad_OE = tf.concat([a_tilde, x0[:,1:]], axis=1)
         return trad_OE
 
@@ -385,11 +403,20 @@ class LPE_Traditional():
         n = n_tilde*self.t_star
 
         dadt = (1.0/self.m_star)*(2.0/(n*a) * dUdOE[:,5])
-        dedt = (1.0/self.m_star)*(-b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5])
-        didt = (1.0/self.m_star)*(-1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
-        domegadt = (1.0/self.m_star)*(-tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1])
-        dOmegadt = (1.0/self.m_star)*(1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
-        dMdt = (1.0/self.m_star)*(n - 2.0/(n*a)*dUdOE[:,0] + (1-e**2)/(n*a**2*e)*dUdOE[:,1])
+        dedt = (1.0/self.m_star)*(
+                -b/(n*a**3*e)*dUdOE[:,3] + 
+                b**2/(n*a**4*e)*dUdOE[:,5])
+        didt = (1.0/self.m_star)*(
+            -1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + 
+            tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
+        domegadt = (1.0/self.m_star)*(
+            -tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + 
+            b/(n*a**3*e)*dUdOE[:,1])
+        dOmegadt = (1.0/self.m_star)*(
+            1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
+        dMdt = n - \
+            (1.0/self.m_star)*(2.0/(n*a)*dUdOE[:,0] + 
+            (1-e**2)/(n*a**2*e)*dUdOE[:,1])
         
         dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
 
@@ -419,11 +446,20 @@ class LPE_Traditional():
             n = n_tilde*self.t_star
 
             dadt = (1.0/self.m_star)*(2.0/(n*a) * dUdOE[:,5])
-            dedt = (1.0/self.m_star)*(-b/(n*a**3*e)*dUdOE[:,3] + b**2/(n*a**4*e)*dUdOE[:,5])
-            didt = (1.0/self.m_star)*(-1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
-            domegadt = (1.0/self.m_star)*(-tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + b/(n*a**3*e)*dUdOE[:,1])
-            dOmegadt = (1.0/self.m_star)*(1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
-            dMdt = (1.0/self.m_star)*(n - 2.0/(n*a)*dUdOE[:,0] + (1-e**2)/(n*a**2*e)*dUdOE[:,1])
+            dedt = (1.0/self.m_star)*(
+                    -b/(n*a**3*e)*dUdOE[:,3] + 
+                    b**2/(n*a**4*e)*dUdOE[:,5])
+            didt = (1.0/self.m_star)*(
+                -1.0/(n*a*b*tf.sin(i))*dUdOE[:,4] + 
+                tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,3])
+            domegadt = (1.0/self.m_star)*(
+                -tf.cos(i)/(n*a*b*tf.sin(i))*dUdOE[:,2] + 
+                b/(n*a**3*e)*dUdOE[:,1])
+            dOmegadt = (1.0/self.m_star)*(
+                1.0/(n*a*b*tf.sin(i))*dUdOE[:,2])
+            dMdt = n - \
+                (1.0/self.m_star)*(2.0/(n*a)*dUdOE[:,0] + 
+                (1-e**2)/(n*a**2*e)*dUdOE[:,1])
                 
             dOE_dt = tf.reshape(tf.concat([dadt, dedt, didt, domegadt, dOmegadt, dMdt],axis=0),(-1, 6))
 
