@@ -146,7 +146,7 @@ def _conditional_true_anomaly_map(OE):
 
 def computeTrueAnomaly(OE):
     f_New = tf.map_fn(fn= lambda OE : _conditional_true_anomaly_map(OE), elems=OE)
-    f_New = convert_angle(f_New)
+    # f_New = convert_angle(f_New)
     return f_New 
 
 
@@ -194,7 +194,7 @@ def delaunay2oe_tf(DelaunayOE, mu):
 
 def cart2delaunay_tf(X, mu):
     trad = cart2trad_tf(X, mu)
-    delaunay_oe = oe2delaunayl_tf(trad)
+    delaunay_oe = oe2delaunay_tf(trad)
     return delaunay_oe
 
 # Equinoctial
@@ -243,17 +243,17 @@ def equinoctial2oe_tf(equi_OE):
     a = p/(1.0 - tf.square(e))
 
     Omega = tf.math.atan2(k,h) # Instance 1
-    Omega = convert_angle(Omega)
+    # Omega = convert_angle(Omega)
 
     # i = 2*tf.atan2(h,tf.cos(Omega))
     i = 2*tf.atan2(tf.sqrt(tf.square(h) + tf.square(k)),1.0)
     I = get_I(i)
 
     omega = tf.math.atan2(g,f) - I*Omega 
-    omega = convert_angle(omega)
+    # omega = convert_angle(omega)
 
     f = L - I*Omega - omega 
-    f = convert_angle(f)
+    # f = convert_angle(f)
 
     M = computeMeanAnomaly(f, e)
 
@@ -301,7 +301,7 @@ def milankovitch2cart_tf(milOE, mu):
 
     H_hat, H_mag = tf.linalg.normalize(H, axis=1)
     e_hat, e_mag = tf.linalg.normalize(e, axis=1)
-    e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat),)
+    e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat),axis=1)
 
     multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
     x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype), multiples)
@@ -313,10 +313,10 @@ def milankovitch2cart_tf(milOE, mu):
     Omega = tf.acos(-tf_dot(y_hat, H)/inter_mag)
 
     omega = tf.acos(tf_dot(e, intermediate)/(e_mag*inter_mag))
-    omega = convert_angle(omega)
+    # omega = convert_angle(omega)
     
     f = L - Omega - omega
-    f = convert_angle(f)
+    # f = convert_angle(f)
     
     vVec = mu/H_mag*(-tf.sin(f)*e_hat + (e_mag+tf.cos(f))*e_perp)
     v_hat, v_mag = tf.linalg.normalize(vVec, axis=1)
@@ -357,10 +357,10 @@ def cart2milankovitch_tf(X, mu):
 
     Omega = tf.atan2(tf_dot(n_Omega_hat, y_hat), tf_dot(n_Omega_hat, x_hat))
     omega = tf.atan2(tf_dot(e_hat, n_Omega_perp_hat), tf_dot(e_hat, n_Omega_hat))
-    omega = convert_angle(omega)
+    # omega = convert_angle(omega)
 
     f = tf.atan2(tf_dot(r,e_perp_hat),tf_dot(r,e_hat))
-    f = convert_angle(f)
+    # f = convert_angle(f)
 
     L_val = Omega + omega + f
     # L_val = make_angle_positive(L_val) # Possible take away
@@ -369,6 +369,7 @@ def cart2milankovitch_tf(X, mu):
     return Milankovitch_OE
 
 # Traditional
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
 def trad2cart_tf(OE, mu):
     """Convert traditional elements to equinoctial elements
 
@@ -379,7 +380,13 @@ def trad2cart_tf(OE, mu):
     Returns:
         milankovitch_OE (tf.Tensor or np.array): [N x 7] (H1, H2, H3, e1, e2, e3, l)
     """
-    a, e, i, omega, Omega, M = tf.transpose(OE[:,0:6])
+    a = OE[:,0]
+    e = OE[:,1]
+    i = OE[:,2]
+    omega = OE[:,3]
+    Omega = OE[:,4]
+    M = OE[:,5]
+    # a, e, i, omega, Omega, M = tf.transpose(OE[:,0:6])
     f = computeTrueAnomaly(OE)
 
     p = semilatus_rectum(OE)
@@ -410,6 +417,7 @@ def trad2cart_tf(OE, mu):
 
     return tf.transpose(r_xyz), tf.transpose(v_xyz)
 
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
 def cart2trad_tf(X, mu):
     r = X[:,0:3]
     v = X[:,3:6]
@@ -436,7 +444,7 @@ def cart2trad_tf(X, mu):
     e_hat, e_mag = tf.linalg.normalize(e)
     e_perp_hat = tf.linalg.cross(h_hat, e_hat)
     omega = tf.atan2(tf_dot(e_hat, n_Omega_perp_hat), tf_dot(e_hat, n_Omega_hat))
-    omega = convert_angle(omega)
+    # omega = convert_angle(omega)
 
     a = p / (1.0 - tf_dot(e, e))
 
