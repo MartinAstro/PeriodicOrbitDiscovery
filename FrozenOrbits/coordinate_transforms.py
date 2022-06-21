@@ -266,6 +266,7 @@ def cart2equinoctial_tf(X,mu):
     return equi
 
 # Milankovitch
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
 def oe2milankovitch_tf(OE, mu):
     """Convert traditional elements to equinoctial elements
 
@@ -280,7 +281,9 @@ def oe2milankovitch_tf(OE, mu):
     H = tf.linalg.cross(R,V)
     eVec = tf.linalg.cross(V, H) / mu - tf.math.l2_normalize(R)
     f = computeTrueAnomaly(OE)
-    L = [OE[:,4] + OE[:,3] + f]
+    M = computeMeanAnomaly(f, tf.norm(eVec,axis=1))
+
+    L = [OE[:,4] + OE[:,3] + M]
     return tf.concat((H,eVec,L),axis=1)
 
 
@@ -301,24 +304,38 @@ def milankovitch2cart_tf(milOE, mu):
 
     H_hat, H_mag = tf.linalg.normalize(H, axis=1)
     e_hat, e_mag = tf.linalg.normalize(e, axis=1)
-    e_perp = tf.math.l2_normalize(tf.linalg.cross(H_hat, e_hat),axis=1)
+    e_perp = tf.linalg.cross(H_hat, e_hat)
+    e_perp_hat = tf.math.l2_normalize(e_perp,axis=1)
+
+    # e_hat, e_mag = tf.linalg.normalize(e)
 
     multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
     x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype), multiples)
     y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype), multiples)
     z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype), multiples)
 
-    intermediate = tf.linalg.cross(z_hat, H) # can cause issues if H in z_hat direction
-    inter_hat, inter_mag = tf.linalg.normalize(intermediate,axis=1)
-    Omega = tf.acos(-tf_dot(y_hat, H)/inter_mag)
+    n_Omega_hat = tf.linalg.l2_normalize(tf.linalg.cross(z_hat, H_hat))
+    n_Omega_perp_hat = tf.linalg.cross(H_hat, n_Omega_hat)
 
-    omega = tf.acos(tf_dot(e, intermediate)/(e_mag*inter_mag))
+    Omega = tf.atan2(tf_dot(n_Omega_hat, y_hat), tf_dot(n_Omega_hat, x_hat))
+    omega = tf.atan2(tf_dot(e_hat, n_Omega_perp_hat), tf_dot(e_hat, n_Omega_hat))
+
     # omega = convert_angle(omega)
-    
-    f = L - Omega - omega
+
+    # Need full OE to compute M     
+    z_hat = tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype)
+    i = tf.acos(tf_dot(H_hat, z_hat)) # if h_hat and z_hat are parallel i is undefined
+    p = tf_dot(H, H)/mu 
+    a = p/(1.0 - e_mag**2)
+
+    M = L - Omega - omega
+
+    OE = tf.concat([a, e_mag, i, omega, Omega, M], axis=1)
+    f = computeTrueAnomaly(OE)
+    f = tf.reshape(f, (-1,1))
     # f = convert_angle(f)
     
-    vVec = mu/H_mag*(-tf.sin(f)*e_hat + (e_mag+tf.cos(f))*e_perp)
+    vVec = mu/H_mag*(-tf.sin(f)*e_hat + (e_mag+tf.cos(f))*e_perp_hat)
     v_hat, v_mag = tf.linalg.normalize(vVec, axis=1)
     r_hat = -(e - tf.linalg.cross(vVec, H)/mu)
 
@@ -362,7 +379,10 @@ def cart2milankovitch_tf(X, mu):
     f = tf.atan2(tf_dot(r,e_perp_hat),tf_dot(r,e_hat))
     # f = convert_angle(f)
 
-    L_val = Omega + omega + f
+    M = computeMeanAnomaly(f, e_mag)
+
+
+    L_val = Omega + omega + M
     # L_val = make_angle_positive(L_val) # Possible take away
     L = tf.reshape(L_val, (1,1))
     Milankovitch_OE = tf.concat((H, e, L), axis=1)

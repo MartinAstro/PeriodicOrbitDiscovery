@@ -322,6 +322,198 @@ class LPE_Milankovitch():
 
         return dOE_dt[0]
 
+
+class LPE_Milankovitch_2():
+    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+        self.model = model
+        self.G_tilde = 6.67408*10E-11 # m^3/(kg*s^2)
+        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name='mu')
+        self.l_star = tf.constant(l_star, dtype=tf.float64, name='ref_length')
+        self.m_star = tf.constant(m_star, dtype=tf.float64, name='ref_mass')
+        self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
+        
+        self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
+   
+    def non_dimensionalize_state(self, x0):
+        mil_OE_ND = tf.concat([(self.t_star/self.l_star**2)*x0[:,0:3], x0[:,3:7]], axis=1)
+        return mil_OE_ND
+
+    def dimensionalize_state(self, x0):
+        mil_OE = tf.concat([(self.l_star**2/self.t_star)*x0[:,0:3], x0[:,3:7]], axis=1)
+        return mil_OE
+
+    def non_dimensionalize_time(self, T):
+        T_ND = T/self.t_star
+        return T_ND
+
+    def dimensionalize_time(self, T):
+        T = T*self.t_star
+        return T
+
+    def _conditional_compute_n(self, a):
+        n = tf.cond(tf.greater_equal(a,0), lambda: tf.sqrt(self.mu/a**3), lambda: tf.sqrt(-self.mu/a**3))
+        return n
+
+    def _compute_n(self, a):
+        n = tf.map_fn(fn= lambda a : self._conditional_compute_n(a), elems=(a))
+        return n 
+
+    def dOE_dt(self,mil_OE): 
+        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
+        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_results = self.dOE_milankovitch_dt(mil_OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()
+
+    def dOE_dt_dx(self,mil_OE): 
+        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
+        mil_OE_input_tf = tf.Variable(mil_OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_dx_results = self.dOE_milankovitch_dt_dx(mil_OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()
+
+    def generate_potential(self,x):
+        """
+        Very silly function, but it's the only way to compile dOE_milankovitch_dt_dx as a tf.function().
+        In short, tf.function is unable to accept the model as an argument without constant retracing
+        according to: https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        U_tilde = self.model.generate_potential_tf(x)
+        return U_tilde
+
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64), tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_milankovitch_dt_dx(self, milankovitch_OE, mu): 
+        print("Retracing")
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+        with tf.GradientTape(persistent=True) as tape_dx:
+            tape_dx.watch(milankovitch_OE)
+            with tf.GradientTape(persistent=True) as tape:
+                tape.watch(milankovitch_OE) 
+                mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
+                r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, mu)
+                u_pred_tilde = self.generate_potential(r_tilde)
+                U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
+            dUdOE = tape.gradient(U, milankovitch_OE)
+
+            dUdH = dUdOE[:,0:3]
+            dUde = dUdOE[:,3:6]
+            dUdl = dUdOE[:,6]
+            
+            p = element_dot(H, H)/mu # TODO: non-dimensionalize mu
+            e_squared = element_dot(e,e)
+            denominator = tf.cond(e_squared >= 1.0, lambda: (e_squared - 1), lambda: (1 - e_squared))
+            a = p/denominator
+            n = self._compute_n(a)
+
+            r = r_tilde/self.l_star
+
+            H_mag = tf.norm(H)
+            e_mag = tf.norm(e)
+            r_mag = tf.norm(r)
+
+            multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
+            z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
+            rVec = r
+            
+            HVec = H
+            eVec = e
+            LVal = tf.reshape(L,(-1,1))
+            
+            r_hat = rVec/r_mag
+            term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))
+            # term2 = (1.0-e_mag**2)/H_mag**2
+            term2 = denominator/H_mag**2
+            # term3 = tf.sqrt(1 - e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec
+            # term4 = (1/H_mag)*element_dot(z_hat, eVec)/(H_mag + element_dot(z_hat, HVec))
+            # term5 = term3 - term4*HVec
+            # term6 = tf.sqrt(1-e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
+            term6 = tf.sqrt(denominator)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
+
+            H_dt = (1.0/self.m_star)*(
+                    tf.linalg.cross(HVec, dUdH) + 
+                    tf.linalg.cross(eVec, dUde) + 
+                    term1*dUdl)
+            e_dt = (1.0/self.m_star)*(
+                    tf.linalg.cross(eVec, dUdH) + 
+                    term2*tf.linalg.cross(HVec,dUde) + 
+                    term6*dUdl)
+            L_dt = (1.0/self.m_star)*(
+                    -element_dot(term1,dUdH) - 
+                    element_dot(term6, dUde)) + \
+                    n 
+
+            dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)  
+        dOE_dt_dx = tape_dx.batch_jacobian(dOE_dt, milankovitch_OE, experimental_use_pfor=False)
+        return dOE_dt_dx[0]
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 7), dtype=tf.float64),tf.TensorSpec(shape=None, dtype=tf.float64)])
+    def dOE_milankovitch_dt(self, milankovitch_OE, mu): 
+        H = milankovitch_OE[:, 0:3]
+        e = milankovitch_OE[:, 3:6]
+        L = milankovitch_OE[:, 6]
+
+        # TODO: Need to change L (omega + Omega + f) to l (omega + Omega + M) 
+
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(milankovitch_OE) 
+            mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
+            r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, self.mu_tilde)
+            u_pred_tilde = self.generate_potential(r_tilde)
+            U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
+        dUdOE = tape.gradient(U, milankovitch_OE)
+
+        p = element_dot(H, H)/mu # TODO: non-dimensionalize mu
+        e_squared = element_dot(e,e)
+        denominator = tf.cond(e_squared >= 1.0, lambda: (e_squared - 1), lambda: (1 - e_squared))
+        a = p/denominator
+        n = self._compute_n(a)
+
+        dUdH = dUdOE[:,0:3]
+        dUde = dUdOE[:,3:6]
+        dUdl = dUdOE[:,6]
+
+        r = r_tilde/self.l_star
+
+        H_mag = tf.norm(H)
+        e_mag = tf.norm(e)
+        r_mag = tf.norm(r)
+
+        multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
+        z_hat = tf.tile(tf.constant([[0.0,0.0,1.0]],dtype=tf.float64), multiples)
+        rVec = r
+        
+        HVec = H
+        eVec = e
+        LVal = tf.reshape(L,(-1,1))
+        
+        r_hat = rVec/r_mag
+        term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))
+        # term2 = (1.0-e_mag**2)/H_mag**2
+        term2 = denominator/H_mag**2
+        # term3 = tf.sqrt(1 - e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec
+        # term4 = (1/H_mag)*element_dot(z_hat, eVec)/(H_mag + element_dot(z_hat, HVec))
+        # term5 = term3 - term4*HVec
+        # term6 = tf.sqrt(1-e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
+        term6 = tf.sqrt(denominator)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
+
+        H_dt = (1.0/self.m_star)*(
+                tf.linalg.cross(HVec, dUdH) + 
+                tf.linalg.cross(eVec, dUde) + 
+                term1*dUdl)
+        e_dt = (1.0/self.m_star)*(
+                tf.linalg.cross(eVec, dUdH) + 
+                term2*tf.linalg.cross(HVec,dUde) + 
+                term6*dUdl)
+        L_dt = (1.0/self.m_star)*(
+                -element_dot(term1,dUdH) - 
+                element_dot(term6, dUde)) + \
+                n 
+
+        dOE_dt = tf.concat([H_dt, e_dt, L_dt],axis=1)      
+
+        return dOE_dt[0]
+
 class LPE_Traditional():
     "LPE with traditional OE, but normalized by length, time, and mass"
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
