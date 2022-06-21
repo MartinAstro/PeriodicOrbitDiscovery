@@ -30,7 +30,13 @@ def dynamics_cart_w_STM(t, z, model, pbar):
 
 def dynamics_OE(t, x, lpe, pbar): 
     OE = x
+    # import tensorflow as tf
     dOEdt = lpe.dOE_dt(OE)
+    if np.any(np.isnan(dOEdt)):
+        import tensorflow as tf
+        tf.config.run_functions_eagerly(True)
+        np.set_printoptions(formatter={'float': "{0:0.5e}".format})
+        raise ValueError(f"NAN encountered in integration at time {t} and state \n {x}")
     pbar.update(t)
     return dOEdt
 

@@ -326,11 +326,19 @@ def milankovitch2cart_tf(milOE, mu):
     z_hat = tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype)
     i = tf.acos(tf_dot(H_hat, z_hat)) # if h_hat and z_hat are parallel i is undefined
     p = tf_dot(H, H)/mu 
-    a = p/(1.0 - e_mag**2)
+
+    e_squared = tf_dot(e,e)
+    denominator = tf.cond(e_squared >= 1.0, lambda: (e_squared - 1), lambda: (1 - e_squared))
+
+    a = p/denominator
 
     M = L - Omega - omega
 
     OE = tf.concat([a, e_mag, i, omega, Omega, M], axis=1)
+
+    rVec, vVec = trad2cart_tf(OE, mu)
+    return rVec, vVec
+
     f = computeTrueAnomaly(OE)
     f = tf.reshape(f, (-1,1))
     # f = convert_angle(f)
