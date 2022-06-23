@@ -224,7 +224,8 @@ class LPE_Milankovitch():
             with tf.GradientTape(persistent=True) as tape:
                 tape.watch(milankovitch_OE) 
                 mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
-                r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, mu)
+                cart_state = milankovitch2cart_tf(mil_OE_dim, mu)
+                r_tilde = cart_state[:,0:3]
                 u_pred_tilde = self.generate_potential(r_tilde)
                 U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
             dUdOE = tape.gradient(U, milankovitch_OE)
@@ -278,7 +279,8 @@ class LPE_Milankovitch():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(milankovitch_OE) 
             mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
-            r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, mu)
+            cart_state = milankovitch2cart_tf(mil_OE_dim, mu)
+            r_tilde = cart_state[:,0:3]
             u_pred_tilde = self.generate_potential(r_tilde)
             U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
         dUdOE = tape.gradient(U, milankovitch_OE)
@@ -394,7 +396,8 @@ class LPE_Milankovitch_2():
             with tf.GradientTape(persistent=True) as tape:
                 tape.watch(milankovitch_OE) 
                 mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
-                r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, mu)
+                cart_state = milankovitch2cart_tf(mil_OE_dim, mu)
+                r_tilde = cart_state[:,0:3]
                 u_pred_tilde = self.generate_potential(r_tilde)
                 U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
             dUdOE = tape.gradient(U, milankovitch_OE)
@@ -456,7 +459,8 @@ class LPE_Milankovitch_2():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(milankovitch_OE) 
             mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
-            r_tilde,v_tilde = milankovitch2cart_tf(mil_OE_dim, self.mu_tilde)
+            cart_state = milankovitch2cart_tf(mil_OE_dim, self.mu_tilde)
+            r_tilde = cart_state[:,0:3]
             u_pred_tilde = self.generate_potential(r_tilde)
             U = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
         dUdOE = tape.gradient(U, milankovitch_OE)
@@ -511,10 +515,11 @@ class LPE_Traditional():
     "LPE with traditional OE, but normalized by length, time, and mass"
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
         self.model = model
+        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name='mu')
         self.l_star = tf.constant(l_star, dtype=tf.float64, name='ref_length')
-        self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
         self.m_star = tf.constant(m_star, dtype=tf.float64, name='ref_mass')
-        self.mu = tf.constant(mu, dtype=tf.float64, name='mu')
+        self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
+        self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
     
     def non_dimensionalize_state(self, x0):
         a = tf.reshape(1.0/self.l_star*x0[:,0],(-1,1))
@@ -574,13 +579,15 @@ class LPE_Traditional():
         return n 
 
 
-    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
+                                  tf.TensorSpec(shape=(), dtype=tf.float64)])
     def dOE_trad_dt(self, OE, mu): 
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE) 
             trad_OE_dim = self.dimensionalize_state(OE)
-            r,v = oe2cart_tf(trad_OE_dim, mu)
-            u_pred_tilde = self.generate_potential(r)
+            cart_state = oe2cart_tf(trad_OE_dim, self.mu_tilde)
+            r_tilde = cart_state[:,0:3]
+            u_pred_tilde = self.generate_potential(r_tilde)
             u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
         dUdOE = tape.gradient(u_pred, OE)
         
@@ -589,8 +596,7 @@ class LPE_Traditional():
         i = OE[:,2] # transpose necessary to assign
 
         b = self._compute_b(OE)
-        n_tilde = self._compute_n(a*self.l_star)           
-        n = n_tilde*self.t_star
+        n = self._compute_n(a)           
 
         dadt = (1.0/self.m_star)*(2.0/(n*a) * dUdOE[:,5])
         dedt = (1.0/self.m_star)*(
@@ -622,8 +628,9 @@ class LPE_Traditional():
             with tf.GradientTape(persistent=True) as tape_dt:
                 tape_dt.watch(OE) 
                 trad_OE_dim = self.dimensionalize_state(OE)
-                r,v = oe2cart_tf(trad_OE_dim, mu)
-                u_pred_tilde = self.generate_potential(r)
+                cart_state = oe2cart_tf(trad_OE_dim, self.mu_tilde)
+                r_tilde = cart_state[:,0:3]
+                u_pred_tilde = self.generate_potential(r_tilde)
                 u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
             dUdOE = tape_dt.gradient(u_pred, OE)
                 
@@ -632,8 +639,7 @@ class LPE_Traditional():
             i = OE[:,2] # transpose necessary to assign
 
             b = self._compute_b(OE)
-            n_tilde = self._compute_n(a*self.l_star)           
-            n = n_tilde*self.t_star
+            n = self._compute_n(a)
 
             dadt = (1.0/self.m_star)*(2.0/(n*a) * dUdOE[:,5])
             dedt = (1.0/self.m_star)*(
