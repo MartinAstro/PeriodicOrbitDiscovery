@@ -39,7 +39,8 @@ class LPE():
         OE = tf.Variable(OE_inputs.astype(np.float64), dtype=tf.float64, name='orbit_elements')
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE) 
-            r, v = trad2cart_tf(OE, self.mu)
+            cart_state = trad2cart_tf(OE, self.mu)
+            r = cart_state[:,0:3]
             u_pred = self.model.gravity_model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, OE)
 
@@ -70,7 +71,8 @@ class LPE():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(equi_OE) 
             OE = equinoctial2oe_tf(equi_OE)
-            r, v = trad2cart_tf(OE, self.mu)
+            cart_state = trad2cart_tf(OE, self.mu)
+            r = cart_state[:,0:3]
             u_pred = self.model.generate_potential(r)
         dUdOE = tape.gradient(u_pred, equi_OE)
 
@@ -95,7 +97,8 @@ class LPE():
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(delaunay_OE) 
             OE = delaunay2oe_tf(delaunay_OE, self.mu)
-            r, v = trad2cart_tf(OE, self.mu)
+            cart_state = trad2cart_tf(OE, self.mu)
+            r = cart_state[:,0:3]
             u_pred = self.model.generate_potential(r)
             H = tf.square(self.mu)/(2.0*tf.square(L.astype(np.float64))) + u_pred
         dUdOE = tape.gradient(H, delaunay_OE)
@@ -422,12 +425,7 @@ class LPE_Milankovitch_2():
             
             r_hat = rVec/r_mag
             term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))
-            # term2 = (1.0-e_mag**2)/H_mag**2
             term2 = denominator/H_mag**2
-            # term3 = tf.sqrt(1 - e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec
-            # term4 = (1/H_mag)*element_dot(z_hat, eVec)/(H_mag + element_dot(z_hat, HVec))
-            # term5 = term3 - term4*HVec
-            # term6 = tf.sqrt(1-e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
             term6 = tf.sqrt(denominator)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
 
             H_dt = (1.0/self.m_star)*(
@@ -489,12 +487,7 @@ class LPE_Milankovitch_2():
         
         r_hat = rVec/r_mag
         term1 = (HVec + H_mag*z_hat)/(H_mag + element_dot(z_hat, HVec))
-        # term2 = (1.0-e_mag**2)/H_mag**2
         term2 = denominator/H_mag**2
-        # term3 = tf.sqrt(1 - e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec
-        # term4 = (1/H_mag)*element_dot(z_hat, eVec)/(H_mag + element_dot(z_hat, HVec))
-        # term5 = term3 - term4*HVec
-        # term6 = tf.sqrt(1-e_mag**2)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
         term6 = tf.sqrt(denominator)/(tf.sqrt(mu*a) + H_mag)*eVec + tf_dot(z_hat, eVec)/(H_mag*(H_mag + tf_dot(z_hat, HVec)))*HVec
 
         H_dt = (1.0/self.m_star)*(

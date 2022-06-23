@@ -28,8 +28,7 @@ def plot(sol, lpe, element_set):
     op.plot_OE(sol.t, sol.y, OE_set=element_set)
     OE_dim = lpe.dimensionalize_state(sol.y.T).numpy()
 
-    R, V = oe2cart_tf(OE_dim, Eros().mu, element_set)
-    cart = np.hstack((R.numpy(), V.numpy()))
+    cart = oe2cart_tf(OE_dim, Eros().mu, element_set).numpy()
 
     sol_cart = copy.deepcopy(sol)
     sol_cart.y = cart.T
@@ -127,7 +126,7 @@ def general_variable_time_bvp_mil_OE_ND_scipy(T_dim, x0_dim, model, solution_bou
     T_i_p1 = copy.deepcopy(T) 
     x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
     def F(x, T, model):
-        pbar = ProgressBar(T, enable=False)
+        pbar = ProgressBar(T, enable=True)
         sol = solve_ivp(dynamics_OE, 
                 [0, T],
                 x,
@@ -231,7 +230,7 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T_dim, x0_dim, model, solution_bo
                 x,
                 args=(model, pbar),
                 t_eval=np.linspace(0, T, 100),
-                atol=1E-7, rtol=1E-7)
+                atol=1E-8, rtol=1E-8)
         pbar.close()
         dx = sol.y[:,-1] - x # return R^6 where m = 6
 
@@ -244,7 +243,7 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T_dim, x0_dim, model, solution_bo
         #         x,
         #         args=(model, pbar),
         #         t_eval=np.linspace(0, 10*T, 1000),
-        #         atol=1E-7, rtol=1E-7)
+        #         atol=1E-8, rtol=1E-8)
         # pbar.close()
         # plot(sol, model, 'traditional')
 
@@ -265,7 +264,7 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T_dim, x0_dim, model, solution_bo
                         [0, T],
                         z_i,
                         args=(model,pbar),
-                        atol=1E-7, rtol=1E-7)
+                        atol=1E-8, rtol=1E-8)
         pbar.close()
         z_f = sol.y[:,-1]
         phi_ti_t0 = np.reshape(z_f[N:], (N,N))
@@ -276,8 +275,8 @@ def general_variable_time_bvp_trad_OE_ND_scipy(T_dim, x0_dim, model, solution_bo
                             args=(T_i_p1, model),
                             bounds=solution_bounds,
                             verbose=2,
-                            # xtol=None,
-                            # ftol=None,
+                            # xtol=1E-5,
+                            ftol=1E-4,
                             # x_scale = np.array([1, 1, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
                             )
     

@@ -55,31 +55,6 @@ def plot_OE_from_state_sol(sol, planet, OE_set='traditional'):
         oe_list.append(OE[0,:].numpy())
     op.plot_OE(t_plot, np.array(oe_list).squeeze().T, OE_set=OE_set)
 
-def plot_OE_results(results, T, lpe):
-    t_plot = np.linspace(0, T, 1000)
-    y_plot = results.sol(t_plot)
-
-    if np.isnan(y_plot).any():
-        exit("NaNs found") 
-
-    op.plot_OE(t_plot, y_plot, OE_set=lpe.element_set)
-
-    OE_init = np.array(results.y[:,0]).reshape((1,6))
-
-    R, V = oe2cart_tf(OE_init, lpe.mu, element_set=lpe.element_set)
-    y = solve_ivp_pos_problem(T, np.hstack((R,V)), lpe, t_eval=t_plot)
-    r_plot = y[0:3,:]
-
-    # y = solve_ivp_problem(T, OE_init, lpe, t_eval=t_plot)
-    # r_plot = []
-    # for y in y_plot.T:
-    #     y_i = np.array([y.T])
-    #     R, V = oe2cart_tf(y_i ,lpe.mu, element_set=lpe.element_set)
-    #     r_plot.append(R)
-    #r_plot = np.array(r_plot).T.squeeze())
-
-    op.plot_orbit_3d(r_plot)
-    plt.show()
 
 def plot_pos_results(results, T, lpe, obj_file=None, animate=False):
     t_plot = np.linspace(0, T, 1000)
@@ -149,3 +124,15 @@ def plot_3d_trajectory(sol, obj_file):
     plt.gca().scatter(xf,yf,zf, s=3, c='r')
 
 
+
+
+def plot_energy(sol, model):
+    x = sol.y
+    U = model.generate_potential(x[0:3,:].reshape((3,-1)).T).squeeze()
+    T = (np.linalg.norm(x[3:6,:], axis=0)**2 / 2.0).squeeze()
+    E = U + T
+
+    plt.figure()
+    plt.plot(sol.t, E)
+    plt.xlabel("Time")
+    plt.ylabel("Energy")
