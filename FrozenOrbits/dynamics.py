@@ -29,6 +29,8 @@ def dynamics_cart_w_STM(t, z, model, pbar):
     return z_dot
 
 def dynamics_OE(t, x, lpe, pbar): 
+    if np.allclose(t,0.58):
+        print("here we are")
     OE = x
     # import tensorflow as tf
     dOEdt = lpe.dOE_dt(OE)

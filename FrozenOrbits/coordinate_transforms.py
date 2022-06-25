@@ -55,13 +55,32 @@ def fFuncH(M, H, e): # Residual Function
     val = M - (e*tf.sinh(H) - H)
     return val
 
-def _e_squared_pm_1_cond(e):
-    e_squared_pm_1 = tf.cond(e > 1., lambda: (tf.square(e) - 1.0), lambda : (1.0-tf.square(e)))
-    return e_squared_pm_1
+def _e_squared_m1_or_1m_e_squared_cond(e):
+    e_squared_m1_or_1m_e_squared = tf.cond(e > 1., lambda: (tf.square(e) - 1.0), lambda : (1.0-tf.square(e)))
+    return e_squared_m1_or_1m_e_squared
 
-def e_squared_pm_1(e):
-    e_squared_pm_1 = tf.map_fn(fn=lambda e: _e_squared_pm_1_cond(e), elems=e)
-    return e_squared_pm_1
+def e_squared_m1_or_1m_e_squared(e):
+    e_squared_m1_or_1m_e_squared = tf.map_fn(fn=lambda e: _e_squared_m1_or_1m_e_squared_cond(e), elems=e)
+    return e_squared_m1_or_1m_e_squared
+
+def _e_vec_normalization_cond(e_ijk):
+    unit_vec = tf.constant([1.0, 0.0, 0.0], dtype=tf.float64)
+    e_mag_lim = tf.constant([1E-14], dtype=tf.float64)
+    e_mag = tf.linalg.norm(e_ijk)
+
+    undefined_e_vec = tf.reduce_all(tf.math.is_nan(e_ijk),axis=0, keepdims=True)
+    excessively_small_e_vec = tf.less(e_mag, e_mag_lim)
+    e_vec_normalized = tf.cond(
+        undefined_e_vec or excessively_small_e_vec, 
+        lambda: unit_vec, 
+        lambda: e_ijk / e_mag)
+    return e_vec_normalized
+
+def e_vec_normalization(eVecList):
+    e_vec_normalized = tf.map_fn(
+        fn=lambda e_ijk: _e_vec_normalization_cond(e_ijk), 
+        elems=eVecList)
+    return e_vec_normalized
 
 def _semi_multiplier_cond(e):
     semi_multiplier = tf.cond(e > 1., lambda: -1.0, lambda : 1.0)
@@ -74,10 +93,10 @@ def _semi_multiplier_cond(e):
 def _semilatus_rectum(OE):
     a = OE[0]
     e = OE[1]
-    e_squared_pm_1 = _e_squared_pm_1_cond(e)
+    e_squared_m1_or_1m_e_squared = _e_squared_m1_or_1m_e_squared_cond(e)
     # semi_multiplier = _semi_multiplier_cond(e)
-    # p = semi_multiplier*a*e_squared_pm_1
-    p = a*e_squared_pm_1
+    # p = semi_multiplier*a*e_squared_m1_or_1m_e_squared
+    p = a*e_squared_m1_or_1m_e_squared
     return p
 
 def semilatus_rectum(OE):
@@ -130,7 +149,7 @@ def _computeEccentricAnomaly(M, e):
 
 def _computeHyperbolicAnomaly(M, e):
     H = tf.identity(M)
-    for i in range(10):
+    for _ in range(10):
         f0 = fFuncH(M,H,e)
         dfdH = 1.0 - e*tf.cosh(H)
         H = H - f0/dfdH
@@ -139,8 +158,6 @@ def _computeHyperbolicAnomaly(M, e):
 def _computeTrueAnomaly_elliptic(OE):
     e = OE[1]
     M = OE[5]
-    # e = OE[:,1]
-    # M = OE[:,5]
     E = _computeEccentricAnomaly(M, e)
     f_New = 2.0*tf.math.atan2(tf.sqrt((1.0+e)/(1.0-e))*tf.tan(E/2.0),1.0)
     return f_New
@@ -148,8 +165,6 @@ def _computeTrueAnomaly_elliptic(OE):
 def _computeTrueAnomaly_hyperbolic(OE):
     e = OE[1]
     M = OE[5]
-    # e = OE[:,1]
-    # M = OE[:,5]
 
     H = _computeHyperbolicAnomaly(M, e)
     f_New = 2.0*tf.math.atan2(tf.sqrt((e + 1.)/(e- 1.))*tf.tanh(H/2.0),1.0)
@@ -297,7 +312,7 @@ def oe2milankovitch_tf(OE, mu):
     R = cart_state[:,0:3]
     V = cart_state[:,3:6]
     H = tf.linalg.cross(R,V)
-    eVec = tf.linalg.cross(V, H) / mu - tf.math.l2_normalize(R)
+    eVec = tf.linalg.cross(V, H) / mu - tf.math.l2_normalize(R, axis=1)
     f = computeTrueAnomaly(OE)
     M = computeMeanAnomaly(f, tf.norm(eVec,axis=1))
 
@@ -320,13 +335,17 @@ def milankovitch2cart_tf(milOE, mu):
     L = tf.reshape(milOE[:,6], [-1, 1])
 
     H_hat, H_mag = tf.linalg.normalize(H, axis=1)
-    e_hat, e_mag = tf.linalg.normalize(e, axis=1)
+
+    # if e_mag == 0, overwrite the e_hat vector with [1,0,0]
+    e_hat = e_vec_normalization(e)
+    e_mag = tf.linalg.norm(e, axis=1, keepdims=True)
 
     multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
     x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=L.dtype), multiples)
     y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=L.dtype), multiples)
     z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=L.dtype), multiples)
-
+    
+    # (Eq. 9.150 - 9.152) Pg 558 Schaub and Junkins
     N_hat = tf.linalg.cross(H_hat, e_hat)
     omega = tf.atan2(tf_dot(e_hat, z_hat), tf_dot(N_hat, z_hat))
     Omega = tf.atan2(tf_dot(H_hat, x_hat), -tf_dot(H_hat, y_hat))
@@ -335,8 +354,8 @@ def milankovitch2cart_tf(milOE, mu):
     i = tf.acos(tf_dot(H_hat, z_hat)) # if h_hat and z_hat are parallel i is undefined
     p = tf_dot(H, H)/mu 
 
-    e_squared_pm_1_value = e_squared_pm_1(e_mag)
-    a = p/e_squared_pm_1_value
+    e_squared_m1_or_1m_e_squared_value = e_squared_m1_or_1m_e_squared(e_mag)
+    a = p/e_squared_m1_or_1m_e_squared_value
 
     M = L - Omega - omega
 
@@ -361,24 +380,33 @@ def cart2milankovitch_tf(X, mu):
     v = X[:,3:6]
 
     H = tf.linalg.cross(r, v)
-    h_hat, h_mag = tf.linalg.normalize(H)
-    r_hat, r_mag = tf.linalg.normalize(r)
+    h_hat, h_mag = tf.linalg.normalize(H, axis=1)
+    r_hat, r_mag = tf.linalg.normalize(r, axis=1)
     e = tf.linalg.cross(v, H)/mu - r_hat
-    e_hat, e_mag = tf.linalg.normalize(e)
 
-    x_hat = tf.constant([[1.0, 0.0, 0.0]], dtype=e_mag.dtype)
-    y_hat = tf.constant([[0.0, 1.0, 0.0]], dtype=e_mag.dtype)
-    z_hat = tf.constant([[0.0, 0.0, 1.0]], dtype=e_mag.dtype)
+    # Can't use tf.linalg.normalize(e, axis=1) because e_mag = 0 will produce a random e_hat vector
+    # The e_vec_normalization method ensures that the value is always e_hat = [1,0,0]
+    e_mag = tf.linalg.norm(e, axis=1, keepdims=True)
+    e_hat = e_vec_normalization(e)
 
+    multiples = tf.convert_to_tensor([tf.shape(H)[0], 1])
+    x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=r_mag.dtype), multiples)
+    y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=r_mag.dtype), multiples)
+    z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=r_mag.dtype), multiples)
+
+    # (Eq. 9.150 - 9.152) Pg 558 Schaub and Junkins
     N_hat = tf.linalg.cross(h_hat, e_hat)
     omega = tf.atan2(tf_dot(e_hat, z_hat), tf_dot(N_hat, z_hat))
     Omega = tf.atan2(tf_dot(h_hat, x_hat), -tf_dot(h_hat, y_hat))
 
-    f = tf.atan2(tf_dot(r,N_hat),tf_dot(r,e_hat))
-    M = computeMeanAnomaly(f, e_mag)
+    # Formation Flying Slide 42
+    # f = tf.atan2(tf_dot(r,N_hat),tf_dot(r,e_hat))
+    f = tf.atan2(tf_dot(tf.linalg.cross(e_hat, r_hat), h_hat), tf_dot(e_hat, r_hat))
+    M_val = computeMeanAnomaly(f, e_mag)
+    M = tf.reshape(M_val, (-1, 1))
 
     L_val = Omega + omega + M
-    L = tf.reshape(L_val, (1,1))
+    L = tf.reshape(L_val, (-1,1))
     Milankovitch_OE = tf.concat((H, e, L), axis=1)
     return Milankovitch_OE
 
@@ -406,20 +434,6 @@ def trad2cart_tf(OE, mu):
     cf = tf.cos(f)
     sf = tf.sin(f)
 
-    # entirely possible this is an issue for e > 1
-    r_mag = p/(1.0+e*cf) # Eq. 9.6 Schaub and Junkins
-    r_eHatTerm = r_mag*(cf)
-    r_ePerpHatTerm = r_mag*(sf)
-
-    # v_eHatTerm = mu/h_mag*(-sf)
-    # v_ePerpHatTerm = mu/h_mag*(e+cf)
-
-    # h**2/mu = p 
-    # v_mag = mu/h_mag # https://orbital-mechanics.space/classical-orbital-elements/orbital-elements-and-the-state-vector.html#orbital-elements-state-vector
-    v_mag = tf.sqrt(mu/p) # Somewhere (?)
-    v_eHatTerm = v_mag*(-sf)
-    v_ePerpHatTerm = v_mag*(e+cf)
-
     cw = tf.cos(omega)
     sw = tf.sin(omega)
 
@@ -429,13 +443,7 @@ def trad2cart_tf(OE, mu):
     ci = tf.cos(i)
     si = tf.sin(i)
 
-    r_nHat = r_eHatTerm*tf.stack([cw,  sw], 0) + r_ePerpHatTerm*tf.stack([-1.0*sw, cw], 0)
-    r_xyz = r_nHat[0,:]*tf.stack([cO, sO, tf.zeros_like(cO)], 0) + r_nHat[1,:]*tf.stack([-1.0*ci*sO, ci*cO, si], 0)
-
-    v_nHat = v_eHatTerm*tf.stack([cw,  sw], 0) + v_ePerpHatTerm*tf.stack([-1.0*sw, cw], 0)
-    v_xyz = v_nHat[0]*tf.stack([cO, sO, tf.zeros_like(cO)], 0) + v_nHat[1]*tf.stack([-1.0*ci*sO, ci*cO, si], 0)
-
-
+  
     ##################
     ## New approach ##
     ##################
@@ -443,45 +451,99 @@ def trad2cart_tf(OE, mu):
     # Perifocial 
     # Eq. 9.45  rVec = (r cos(f) i_e + r sin(f) i_p)
     # Eq. 9.167 vVec = -mu/h * sin(f) i_e + mu/h(e + cos(f)) i_p
-
-    PN = [
-        [cw*cO - sw*ci*sO,  cw*sO+sw*ci*cO,    sw*si],
-        [-sw*cO - cw*ci*sO, -sw*sO + cw*ci*cO, cw*si],
-        [si*sO,             -si*cO,            ci]
-        ]
     
-    NP = [
-        [cw*cO - sw*ci*sO, -sw*cO-cw*ci*sO,  si*sO],
-        [cw*sO + sw*ci*cO, -sw*sO+cw*ci*cO, -si*cO],
-        [sw*si,             cw*si,           ci]
-    ]
+    # Eq. 9.46 
+    # NP = [
+    #     [cw*cO - sw*ci*sO, -sw*cO - cw*ci*sO,  si*sO],
+    #     [cw*sO + sw*ci*cO, -sw*sO + cw*ci*cO, -si*cO],
+    #     [sw*si,             cw*si,             ci]
+    # ]
 
-    r_e = r_mag*(cf) #[#, 0, 0] r_vec in i_e
-    r_p = r_mag*(-sf) # [0, #, 0] r_vec in i_p
-    r_h = tf.zeros_like(cO) #(?)
+    r_mag = p/(1.0+e*cf) # Eq. 9.6 Schaub and Junkins
 
-    r_x = (cw*cO - sw*ci*sO)*r_e + (-sw*cO-cw*ci*sO)*r_p + (si*sO)*r_h
-    r_y = (cw*sO + sw*ci*cO)*r_e + (-sw*sO+cw*ci*cO)*r_p + (-si*cO)*r_h
-    r_z = (sw*si)*r_e + (cw*si)*r_p + (ci)*r_h
-
-    r_xyz = tf.stack([r_x, r_y, r_z], 0)
-
+    r_e = r_mag*(cf) # r_vec in i_e
+    r_p = r_mag*(sf) # r_vec in i_p
+    r_h = tf.zeros_like(r_e) # r_vec in i_h 
 
     v_e = -mu/h_mag*sf
     v_p = mu/h_mag*(e + cf)
-    v_h = tf.zeros_like(cO)
+    v_h = tf.zeros_like(v_e)
+
+    # Eq. 9.46 (perifocal to inertial)
+    r_x = (cw*cO - sw*ci*sO)*r_e + (-sw*cO - cw*ci*sO)*r_p + (si*sO)*r_h
+    r_y = (cw*sO + sw*ci*cO)*r_e + (-sw*sO + cw*ci*cO)*r_p + (-si*cO)*r_h
+    r_z = (sw*si)*r_e + (cw*si)*r_p + (ci)*r_h
+
 
     v_x = (cw*cO - sw*ci*sO)*v_e + (-sw*cO-cw*ci*sO)*v_p + (si*sO)*v_h
     v_y = (cw*sO + sw*ci*cO)*v_e + (-sw*sO+cw*ci*cO)*v_p + (-si*cO)*v_h
     v_z = (sw*si)*v_e + (cw*si)*v_p + (ci)*v_h
-
-    v_xyz = tf.stack([v_x, v_y, v_z], 0)
+    
+    r_xyz = tf.transpose(tf.stack([r_x, r_y, r_z], 0))
+    v_xyz = tf.transpose(tf.stack([v_x, v_y, v_z], 0))
 
     # Perifocial conversion (Use Eqs 9.150-9.152 with 9.45)
     # Ideally we'd have e_vec, and h_vec expressed in the inertial frame
     # but such would require values of r, and v
+
+
+    # ## DEBUGGING ##
+    # ## CONVERT to Milankovitch directly ## 
+    # # ANY FRAME is inconsistent with the initial conditions!! ## 
+    # r_eph = tf.transpose(tf.stack([r_e, r_p, r_h], 0))
+    # v_eph = tf.transpose(tf.stack([v_e, v_p, v_h], 0))
+
+    # HVec_N = tf.linalg.cross(r_xyz, v_xyz)
+    # eVec_N = tf.linalg.cross(v_xyz, HVec_N)/mu - tf.linalg.l2_normalize(r_xyz, axis=1) # This is just eVec = e*i_e
+
+    # e_mag = tf.linalg.norm(eVec_N, keepdims=True)
+
+
+
+    # # Eq 9.99 -- e vector in perifocal frame
+    # e_e = e_mag
+    # e_p = tf.zeros_like(e_e)
+    # e_h = tf.zeros_like(e_e)
+    # e_eph = tf.transpose(tf.stack([e_e, e_p, e_h], 0))
+
+    # HVec_P = tf.linalg.cross(r_eph, v_eph)
+    # eVec_P = tf.linalg.cross(v_eph, HVec_P)/mu - tf.linalg.l2_normalize(r_eph, axis=1) # This is just eVec = e*i_e
+    # assert np.allclose(eVec_P[0],e_eph[0,0])
+
+
+    # # perifocal -> cartesian 
+    # e_x = (cw*cO - sw*ci*sO)*e_e + (-sw*cO-cw*ci*sO)*e_p + (si*sO)*e_h
+    # e_y = (cw*sO + sw*ci*cO)*e_e + (-sw*sO+cw*ci*cO)*e_p + (-si*cO)*e_h
+    # e_z = (sw*si)*e_e + (cw*si)*e_p + (ci)*e_h
+    # e_xyz = tf.transpose(tf.stack([e_x, e_y, e_z], 0))
+    # assert np.allclose(e_xyz[0,0], eVec_N[0])
+
+
+    # cT = tf.cos(omega + f)
+    # sT = tf.sin(omega + f)
+
+    # # ON (orbit - inertial) -- 9.50
+    # ON = [
+    #     [cT*cO - sT*ci*sO, cT*sO + sT*ci*cO, sT*si],
+    #     [-sT*cO-cT*ci*sO, -sT*sO + cT*ci*cO, cT*ci],
+    #     [si*sO, -si*cO, ci]
+    #     ]
+
+
+    # # OP (orbit - perifocal) -- 9.50
+    # OP = [
+    #     [ cf, sf, 0],
+    #     [-sf, cf, 0],
+    #     [0,    0, 1]
+    #     ]
+
+    # e_r = cf*e_e + sf*e_p + 0.0*e_h
+    # e_T = -sf*e_e + cf*e_p + 0.0*e_h
+    # e_h = 0*e_e + 0*e_p + 1.0*e_h
     
-    cart_state = tf.concat([tf.transpose(r_xyz), tf.transpose(v_xyz)],axis=1)
+    # e_rTh = tf.transpose(tf.stack([e_r, e_T, e_h], 0))
+
+    cart_state = tf.concat([r_xyz, v_xyz],axis=1)
     return cart_state
 
 @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
@@ -490,35 +552,41 @@ def cart2trad_tf(X, mu):
     v = X[:,3:6]
 
     h = tf.linalg.cross(r, v)
-    h_hat, h_mag = tf.linalg.normalize(h)
+    h_hat, h_mag = tf.linalg.normalize(h,axis=1)
     p = tf_dot(h, h)/ mu
 
-    x_hat = tf.constant([[1.0, 0.0, 0.0]], dtype=p.dtype)
-    y_hat = tf.constant([[0.0, 1.0, 0.0]], dtype=p.dtype)
-    z_hat = tf.constant([[0.0, 0.0, 1.0]], dtype=p.dtype)
+    multiples = tf.convert_to_tensor([tf.shape(r)[0], 1])
+    x_hat = tf.tile(tf.constant([[1.0, 0.0, 0.0]], dtype=r.dtype), multiples)
+    y_hat = tf.tile(tf.constant([[0.0, 1.0, 0.0]], dtype=r.dtype), multiples)
+    z_hat = tf.tile(tf.constant([[0.0, 0.0, 1.0]], dtype=r.dtype), multiples)
     pi = tf.constant(np.pi, dtype=p.dtype)
     i = tf.acos(tf_dot(h_hat, z_hat)) # if h_hat and z_hat are parallel i is undefined
 
-    if i == 0 or i == pi:
-        raise ValueError("h_hat and z_hat are parallel (i.e. i=0 or i=pi) which prevent the system from being well defined!")
+    # if tf.reduce_all(i == 0) or tf.reduce_all(i == pi):
+    #     raise ValueError("h_hat and z_hat are parallel (i.e. i=0 or i=pi) which prevent the system from being well defined!")
 
-    r_hat, r_mag = tf.linalg.normalize(r)
+    r_hat, r_mag = tf.linalg.normalize(r,axis=1)
     e = tf.linalg.cross(v, h) / mu - r_hat
-    e_hat, e_mag = tf.linalg.normalize(e)
+
+    e_mag = tf.linalg.norm(e, axis=1, keepdims=True)
+    e_hat = e_vec_normalization(e)
+
 
     # Pg 558 Schaub and Junkins
     N_hat = tf.linalg.cross(h_hat, e_hat)
     omega = tf.atan2(tf_dot(e_hat, z_hat), tf_dot(N_hat, z_hat))
     Omega = tf.atan2(tf_dot(h_hat, x_hat), -tf_dot(h_hat, y_hat))
 
-    e_squared_pm_1_value = e_squared_pm_1(e_mag)
-    a = p / e_squared_pm_1_value
+    e_squared_m1_or_1m_e_squared_value = e_squared_m1_or_1m_e_squared(e_mag)
+    a = p / e_squared_m1_or_1m_e_squared_value
 
-    f = tf.atan2(tf_dot(r,N_hat),tf_dot(r,e_hat))
+    # Formation Flying Slide 42 Two-Body
+    f = tf.atan2(tf_dot(tf.linalg.cross(e_hat, r_hat), h_hat), tf_dot(e_hat, r_hat))
+    # f = tf.atan2(tf_dot(r,N_hat),tf_dot(r,e_hat))
     M = computeMeanAnomaly(f, e_mag)
 
-    OE = tf.stack((tf.squeeze(a), tf.squeeze(e_mag), tf.squeeze(i), tf.squeeze(omega), tf.squeeze(Omega), tf.squeeze(M)))
-    OE = tf.reshape(OE, (1,6))
+    OE = tf.transpose(tf.stack((tf.squeeze(a), tf.squeeze(e_mag), tf.squeeze(i), tf.squeeze(omega), tf.squeeze(Omega), tf.squeeze(M))))
+    OE = tf.reshape(OE, (-1,6))
 
     return OE
 
