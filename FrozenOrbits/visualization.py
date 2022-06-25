@@ -15,7 +15,7 @@ def plot_OE_suite_from_state_sol(sol, planet):
     equi_oe_list = []
     del_oe_list = []
     oe_list = []
-    for i in range(len(t_plot)):
+    for i in range(len(t_plot, **kwargs)):
         y = y_plot[:,i].reshape((1,6))
 
         trad_oe = cart2trad_tf(y, planet.mu)        
@@ -33,99 +33,6 @@ def plot_OE_suite_from_state_sol(sol, planet):
     op.plot_OE(t_plot, np.array(equi_oe_list).squeeze().T, OE_set='equinoctial')
     op.plot_OE(t_plot, np.array(del_oe_list).squeeze().T, OE_set='delaunay')
 
-def plot_OE_from_state_sol(sol, planet, OE_set='traditional'):
-    t_plot = sol.t
-    y_plot = sol.y # [6, N]
-    
-    oe_list = []
-    for i in range(len(t_plot)):
-        y = y_plot[:,i].reshape((1,6))
-
-        if OE_set == "milankovitch":
-            OE = cart2milankovitch_tf(y, planet.mu)
-        if OE_set == "traditional":
-            OE = cart2trad_tf(y, planet.mu)        
-        if OE_set == "delaunay":
-            trad_oe = cart2trad_tf(y, planet.mu)        
-            OE = oe2delaunay_tf(trad_oe, planet.mu)
-        if OE_set == "equinoctial":
-            trad_oe = cart2trad_tf(y, planet.mu)        
-            OE = oe2equinoctial_tf(trad_oe)
-
-        oe_list.append(OE[0,:].numpy())
-    op.plot_OE(t_plot, np.array(oe_list).squeeze().T, OE_set=OE_set)
-
-
-def plot_pos_results(results, T, lpe, obj_file=None, animate=False):
-    t_plot = np.linspace(0, T, 1000)
-    y_plot = results.sol(t_plot)
-
-    if np.isnan(y_plot).any():
-        exit("NaNs found") 
-
-    op.plot_orbit_3d(y_plot, obj_file=obj_file)
-
-    # if True:
-
-    #     def animate_fcn(angle):
-    #         plt.gca().view_init(angle,30)
-    #         return plt.gcf(),
-    #     # for angle in range(0, 360):
-        
-    #     anim = animation.FuncAnimation(plt.gcf(), animate_fcn, frames=360, interval=20, blit=True)
-    #     # ani = animation.FuncAnimation(plt.gcf(), animate_fcn, fargs=(range(0,360)), interval=20, blit=False, save_count=50)
-
-    #     anim.save("movie.gif")
-        
-        # or
-        
-        # writer = animation.FFMpegWriter(
-        #     fps=15, metadata=dict(artist='Me'), bitrate=1800)
-        # ani.save("movie.mp4", writer=writer)
-
-def plot_1d_solutions(t_mesh, solution, new_fig=True, y_scale=None):
-    if new_fig:
-        plt.figure()
-
-    y_vec = copy.deepcopy(solution.y)
-    y_suffix = ""
-    if y_scale is not None:
-        y_vec[0:3] = y_vec[0:3]/y_scale
-        y_suffix = "'" # prime
-
-    plt.subplot(3,2,1)
-    plt.plot(t_mesh, y_vec[0])
-    plt.ylabel('x'+y_suffix)
-    plt.subplot(3,2,3)
-    plt.plot(t_mesh, y_vec[1])
-    plt.ylabel('y'+y_suffix)
-    plt.subplot(3,2,5)
-    plt.plot(t_mesh, y_vec[2])
-    plt.ylabel('z'+y_suffix)
-    plt.xlabel("Time [s]")
-
-    plt.subplot(3,2,2)
-    plt.plot(t_mesh, y_vec[3])
-    plt.ylabel('v_x')
-    plt.subplot(3,2,4)
-    plt.plot(t_mesh, y_vec[4])
-    plt.ylabel('v_y')
-    plt.subplot(3,2,6)
-    plt.plot(t_mesh, y_vec[5])
-    plt.ylabel('v_z')
-    plt.xlabel("Time [s]")
-
-
-def plot_3d_trajectory(sol, obj_file):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    xf, yf, zf = sol.y[0:3,0]
-    op.plot3d(sol.y[0:3], obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
-    plt.gca().scatter(xf,yf,zf, s=3, c='r')
-
-
-
-
 def plot_energy(sol, model):
     x = sol.y
     U = model.generate_potential(x[0:3,:].reshape((3,-1)).T).squeeze()
@@ -136,3 +43,209 @@ def plot_energy(sol, model):
     plt.plot(sol.t, E)
     plt.xlabel("Time")
     plt.ylabel("Energy")
+
+
+
+#########################
+## Low Level Functions ##
+#########################
+
+def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
+    plt.plot(x,y)
+
+    if y0_hline:
+        hlines.append(y[0])
+
+    for hline in hlines:
+        plt.hlines(hline, np.min(x), np.max(x))
+    for vline in vlines: 
+        plt.vlines(vline, np.min(y), np.max(y))
+
+
+##########################
+## High Level Functions ##
+##########################
+
+
+def __plot_TraditionalOE(t, OE, **kwargs):    
+    a_plot, e_plot, i_plot, omega_plot, Omega_plot, M_plot = OE[:,0:6]
+
+    vis = VisualizationBase()
+    vis.newFig()
+    plt.subplot(3,2,1)
+    plot_1d(t, a_plot, **kwargs) 
+    plt.ylabel("Semi Major Axis")
+    plt.subplot(3,2,2)
+    plot_1d(t, e_plot, **kwargs)
+    plt.ylabel("Eccentricity")
+    plt.subplot(3,2,3)
+    plot_1d(t, i_plot, **kwargs)
+    plt.ylabel("Inclination")
+
+    plt.subplot(3,2,4)
+    plot_1d(t, omega_plot, **kwargs) 
+    plt.ylabel("Arg of Periapsis")
+    plt.subplot(3,2,5)
+    plot_1d(t, Omega_plot, **kwargs)
+    plt.ylabel("RAAN")
+    plt.subplot(3,2,6)
+    plot_1d(t, M_plot, **kwargs)
+    plt.ylabel("M")
+    plt.suptitle("Traditional Elements")
+
+def __plot_DelaunayOE(t, DelaunayOE, **kwargs):
+    l_plot, g_plot, h_plot, L_plot, G_plot, H_plot = DelaunayOE[:,0:6]
+
+    vis = VisualizationBase()
+    vis.newFig()
+    plt.subplot(3,2,1)
+    plot_1d(t, l_plot, **kwargs) 
+    plt.ylabel("l")
+    plt.subplot(3,2,2)
+    plot_1d(t, g_plot, **kwargs)
+    plt.ylabel("g")
+    plt.subplot(3,2,3)
+    plot_1d(t, h_plot, **kwargs)
+    plt.ylabel("h")
+
+    plt.subplot(3,2,4)
+    plot_1d(t, L_plot, **kwargs) 
+    plt.ylabel("L")
+    plt.subplot(3,2,5)
+    plot_1d(t, G_plot, **kwargs)
+    plt.ylabel("G")
+    plt.subplot(3,2,6)
+    plot_1d(t, H_plot, **kwargs)
+    plt.ylabel("H")
+    plt.suptitle("Delaunay Elements")
+
+def __plot_EquinoctialOE(t, EquinoctialOE, **kwargs):
+    p,f,g,L,h,k = EquinoctialOE[:,0:6]
+    
+    vis = VisualizationBase()
+    vis.newFig()
+    plt.subplot(3,2,1)
+    plot_1d(t, p, **kwargs) 
+    plt.ylabel("p")
+    plt.subplot(3,2,2)
+    plot_1d(t, f, **kwargs)
+    plt.ylabel("f")
+    plt.subplot(3,2,3)
+    plot_1d(t, g, **kwargs)
+    plt.ylabel("g")
+
+    plt.subplot(3,2,4)
+    plot_1d(t, L, **kwargs) 
+    plt.ylabel("L")
+    plt.subplot(3,2,5)
+    plot_1d(t, h, **kwargs)
+    plt.ylabel("h")
+    plt.subplot(3,2,6)
+    plot_1d(t, k, **kwargs)
+    plt.ylabel("k")
+    plt.suptitle("Equinoctial Elements")
+
+def __plot_MilankovitchOE(t, MilankovitchOE, **kwargs):
+    h1, h2, h3, e1, e2, e3, l = MilankovitchOE[:,0:7]
+    
+    vis = VisualizationBase()
+    vis.newFig()
+    plt.subplot(3,3,1)
+    plot_1d(t, h1, **kwargs) 
+    plt.ylabel("H1")
+    plt.subplot(3,3,2)
+    plot_1d(t, h2, **kwargs)
+    plt.ylabel("H2")
+    plt.subplot(3,3,3)
+    plot_1d(t, h3, **kwargs)
+    plt.ylabel("H3")
+
+    plt.subplot(3,3,4)
+    plot_1d(t, e1, **kwargs) 
+    plt.ylabel("e1")
+    plt.subplot(3,3,5)
+    plot_1d(t, e2, **kwargs)
+    plt.ylabel("e2")
+    plt.subplot(3,3,6)
+    plot_1d(t, e3, **kwargs)
+    plt.ylabel("e3")
+
+    plt.subplot(3,3,8)
+    plot_1d(t, l, **kwargs)
+    plt.ylabel("l")
+    plt.suptitle("Milankovitch Elements")
+
+
+###################
+## API Functions ##
+###################
+
+def plot_OE_1d(t, OE, element_set, **kwargs):
+    """Plot the orbital elements in subplots
+
+    Args:
+        t (np.array): time vector
+        OE (np.array): orbital element vector [N x -1] (time x state_dim)
+        element_set (str): element set key
+
+    Keyword Args:
+        y0_hlines (bool) : add an hline at y0
+
+    """
+    if element_set.lower() == "traditional":
+        __plot_TraditionalOE(t, OE, **kwargs)
+    elif element_set.lower() == "delaunay":
+        __plot_DelaunayOE(t, OE, **kwargs)
+    elif element_set.lower() == "equinoctial":
+        __plot_EquinoctialOE(t, OE, **kwargs)
+    elif element_set.lower() == "milankovitch":
+        __plot_MilankovitchOE(t, OE, **kwargs)
+    else:
+        raise NotImplementedError(element_set + " is not a currently supported orbital element set!")
+
+def plot_cartesian_state_1d(t, X, **kwargs):
+    """Plot the cartesian state vector in subplots
+
+    Args:
+        t (np.array): time vector
+        X (np.array): state vector [N x 6]
+
+    Keyword Args:
+        y0_hlines (bool) : add an hline at y0
+    """
+
+    plt.figure()
+    plt.subplot(2,3,1)
+    plot_1d(t, X[:,0], **kwargs)
+    plt.ylabel("$x$")
+    plt.subplot(2,3,2)
+    plot_1d(t, X[:,1], **kwargs)
+    plt.ylabel("$y$")
+    plt.subplot(2,3,3)
+    plot_1d(t, X[:,2], **kwargs)
+    plt.ylabel("$z$")
+    plt.xlabel("Time")
+
+    plt.subplot(2,3,4)
+    plot_1d(t, X[:,3], **kwargs)
+    plt.ylabel("$\dot{x}$")
+    plt.subplot(2,3,5)
+    plot_1d(t, X[:,4], **kwargs)
+    plt.ylabel("$\dot{y}$")
+    plt.subplot(2,3,6)
+    plot_1d(t, X[:,6], **kwargs)
+    plt.ylabel("$\dot{z}$")
+    plt.xlabel("Time")
+
+def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
+    """Plot the cartesian state vector in subplots
+
+    Args:
+        t (np.array): time vector
+        X (np.array): state vector [N x 6]
+    """
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    x_i, y_i, z_i = X[0,0:3]
+    op.plot3d(X[:,0:3], obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
+    plt.gca().scatter(x_i, y_i, z_i, s=3, c='r')

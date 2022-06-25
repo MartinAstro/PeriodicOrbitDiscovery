@@ -11,7 +11,6 @@ import copy
 import time
 from FrozenOrbits.dynamics import *
 from FrozenOrbits.utils import calc_angle_diff
-from FrozenOrbits.visualization import plot_3d_trajectory
 
 from GravNN.Support.transformations import cart2sph, invert_projection
 from scipy.integrate import solve_ivp
@@ -19,20 +18,19 @@ from scipy.optimize import least_squares, root
 from GravNN.Support.ProgressBar import ProgressBar
 
 
-def plot(sol, lpe, element_set):
+def debug_plot(sol, lpe, element_set):
     from GravNN.CelestialBodies.Asteroids import Eros
-    import OrbitalElements.orbitalPlotting as op
     import matplotlib.pyplot as plt
-    from FrozenOrbits.visualization import plot_3d_trajectory
+    from FrozenOrbits.visualization import plot_cartesian_state_3d, plot_OE_1d
+    
+    plot_OE_1d(sol.t, sol.y.T, element_set)
 
-    op.plot_OE(sol.t, sol.y, OE_set=element_set)
     OE_dim = lpe.dimensionalize_state(sol.y.T).numpy()
-
     cart = oe2cart_tf(OE_dim, Eros().mu, element_set).numpy()
 
     sol_cart = copy.deepcopy(sol)
     sol_cart.y = cart.T
-    plot_3d_trajectory(sol_cart, Eros().obj_8k)
+    plot_cartesian_state_3d(sol_cart.t, sol_cart.y.T, Eros().obj_8k)
     plt.show()
     return
 
@@ -119,68 +117,6 @@ def general_variable_time_bvp(T, x0, model):
 
     return x_i_p1, T_i_p1
 
-def general_variable_time_bvp_mil_OE_ND_scipy(T_dim, x0_dim, model, solution_bounds):
-    x0 = model.non_dimensionalize_state(x0_dim).numpy()
-    T = model.non_dimensionalize_time(T_dim).numpy()
-    print(f"Total Time {T} \nDim State {x0_dim} \nNon Dim State {x0}")
-    T_i_p1 = copy.deepcopy(T) 
-    x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
-    def F(x, T, model):
-        pbar = ProgressBar(T, enable=True)
-        sol = solve_ivp(dynamics_OE, 
-                [0, T],
-                x,
-                args=(model, pbar),
-                atol=1E-7, rtol=1E-7,
-                t_eval=np.linspace(0,T, 100)
-                )
-        pbar.close()
-        dx = sol.y[:,-1] - x 
-        dx[6] = calc_angle_diff(x[6], sol.y[6,-1])
-
-        # for debugging
-        plot(sol, model, 'milankovitch')
-
-        print(f"dx_norm {np.linalg.norm(dx)} \t dH_mag {np.linalg.norm(dx[0:3])} \t de_mag = {np.linalg.norm(dx[3:6])} \t dL = {dx[6]}")# \n {dx}")
-        return dx
-
-    def jac(x, T, model):
-        pbar = ProgressBar(T, enable=True)
-        N = len(x)
-        phi_0 = np.identity(N)
-        z_i = np.hstack((x.reshape((-1,)), phi_0.reshape((-1))))
-        sol = solve_ivp(dynamics_OE_w_STM, 
-                        [0, T],
-                        z_i,
-                        args=(model,pbar),
-                        atol=1E-7, rtol=1E-7)
-        pbar.close()
-        z_f = sol.y[:,-1]
-        phi_ti_t0 = np.reshape(z_f[N:], (N,N))
-        D = phi_ti_t0 - np.eye(N)
-        return D
-
-    result = least_squares(F, x_i_p1, jac, 
-                            args=(T_i_p1, model),
-                            bounds=solution_bounds,
-                            verbose=2,
-                            # xtol=None,
-                            # ftol=None,
-                            # x_scale = np.array([1, 1, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
-                            )
-    
-    print(f"""
-    Success? ({result.success} \t Status: {result.status} 
-    Message: {result.message}
-    x0 = {result.x} 
-    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
-    """)
-
-    x_i_p1 = model.dimensionalize_state(np.array([result.x])).numpy()
-    T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
-
-    return x_i_p1, T_i_p1
-
 def general_variable_time_bvp_trad_OE(T, x0_dim, model, constraint):
 
     x0 = model.non_dimensionalize_state(x0_dim).numpy()
@@ -216,78 +152,97 @@ def general_variable_time_bvp_trad_OE(T, x0_dim, model, constraint):
 
     return x_i_p1, T_i_p1
 
-def general_variable_time_bvp_trad_OE_ND_scipy(T_dim, x0_dim, model, solution_bounds):
+######################
+## Scipy algorithms ##
+######################
 
-    x0 = model.non_dimensionalize_state(x0_dim).numpy()
-    T = model.non_dimensionalize_time(T_dim).numpy()
-    print(f"Total Time {T} \n Dim State {x0_dim} \n Non Dim State {x0}")
-    T_i_p1 = copy.deepcopy(T) 
-    x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
-    def F(x, T, model):
-        pbar = ProgressBar(T, enable=False)
-        sol = solve_ivp(dynamics_OE, 
-                [0, T],
-                x,
-                args=(model, pbar),
-                t_eval=np.linspace(0, T, 100),
-                atol=1E-8, rtol=1E-8)
-        pbar.close()
-        dx = sol.y[:,-1] - x # return R^6 where m = 6
 
-        # # for debugging
-        # plot(sol, model, 'traditional')
+def F_milankovitch(x, T, lpe):
+    pbar = ProgressBar(T, enable=False)
+    sol = solve_ivp(dynamics_OE, 
+            [0, T],
+            x,
+            args=(lpe, pbar),
+            atol=1E-7, rtol=1E-7,
+            t_eval=np.linspace(0,T, 100)
+            )
+    pbar.close()
+    dx = sol.y[:,-1] - x 
+    dx[6] = calc_angle_diff(x[6], sol.y[6,-1])
 
-        # pbar = ProgressBar(T, enable=False)
-        # sol = solve_ivp(dynamics_OE, 
-        #         [0, 20*T],
-        #         x,
-        #         args=(model, pbar),
-        #         t_eval=np.linspace(0, 10*T, 1000),
-        #         atol=1E-8, rtol=1E-8)
-        # pbar.close()
-        # plot(sol, model, 'traditional')
+    # for debugging
+    # debug_plot(sol, lpe, 'milankovitch')
 
-        # dx[2] = calc_angle_diff(x[2], sol.y[2,-1])
-        dx[3] = calc_angle_diff(x[3], sol.y[3,-1])
-        dx[4] = calc_angle_diff(x[4], sol.y[4,-1])
-        dx[5] = calc_angle_diff(x[5], sol.y[5,-1])
+    print(f"dx_norm {np.linalg.norm(dx)} \t dH_mag {np.linalg.norm(dx[0:3])} \t de_mag = {np.linalg.norm(dx[3:6])} \t dL = {dx[6]}")# \n {dx}")
+    return dx
 
-        print(f"dx_norm {np.linalg.norm(dx)} \t {dx}")
-        return dx
+def F_traditional(x, T, lpe):
+    pbar = ProgressBar(T, enable=False)
+    sol = solve_ivp(dynamics_OE, 
+            [0, T],
+            x,
+            args=(lpe, pbar),
+            t_eval=np.linspace(0, T, 100),
+            atol=1E-7, rtol=1E-7)
+    pbar.close()
+    dx = sol.y[:,-1] - x # return R^6 where m = 6
 
-    def jac(x, T, model):
-        pbar = ProgressBar(T, enable=True)
-        N = len(x)
-        phi_0 = np.identity(N)
-        z_i = np.hstack((x.reshape((-1,)), phi_0.reshape((-1))))
-        sol = solve_ivp(dynamics_OE_w_STM, 
-                        [0, T],
-                        z_i,
-                        args=(model,pbar),
-                        atol=1E-8, rtol=1E-8)
-        pbar.close()
-        z_f = sol.y[:,-1]
-        phi_ti_t0 = np.reshape(z_f[N:], (N,N))
-        D = phi_ti_t0 - np.eye(N)
-        return D# return R^(6 x 6) where m = 6 and n = 6
+    # # for debugging
+    # debug_plot(sol, lpe, 'traditional')
 
-    result = least_squares(F, x_i_p1, jac, 
-                            args=(T_i_p1, model),
+    # dx[2] = calc_angle_diff(x[2], sol.y[2,-1])
+    dx[3] = calc_angle_diff(x[3], sol.y[3,-1])
+    dx[4] = calc_angle_diff(x[4], sol.y[4,-1])
+    dx[5] = calc_angle_diff(x[5], sol.y[5,-1])
+
+    print(f"dx_norm {np.linalg.norm(dx)} \t {dx}")
+    return dx
+
+def jac(x, T, lpe):
+    pbar = ProgressBar(T, enable=True)
+    N = len(x)
+    phi_0 = np.identity(N)
+    z_i = np.hstack((x.reshape((-1,)), phi_0.reshape((-1))))
+    sol = solve_ivp(dynamics_OE_w_STM, 
+                    [0, T],
+                    z_i,
+                    args=(lpe,pbar),
+                    atol=1E-7, rtol=1E-7)
+    pbar.close()
+    z_f = sol.y[:,-1]
+    phi_ti_t0 = np.reshape(z_f[N:], (N,N))
+    D = phi_ti_t0 - np.eye(N)
+    return D
+
+def scipy_periodic_orbit_algorithm(T_dim, OE_0_dim, lpe, solution_bounds, element_set):
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if element_set == 'traditional':
+        F = F_traditional
+    elif element_set == 'milankovitch':
+        F = F_milankovitch
+    else:
+        raise NotImplementedError(f"The element set '{element_set}' is not defined!")
+
+    result = least_squares(F, OE_0.reshape((-1,)), jac, 
+                            args=(T, lpe),
                             bounds=solution_bounds,
                             verbose=2,
-                            # xtol=1E-5,
-                            ftol=1E-4,
-                            # x_scale = np.array([1, 1, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
                             )
     
     print(f"""
     Success? ({result.success} \t Status: {result.status} 
     Message: {result.message}
-    x0 = {result.x} 
+    OE_0 = {result.x} 
     Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
     """)
 
-    x_i_p1 = model.dimensionalize_state(np.array([result.x])).numpy()
-    T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
+    OE_0_sol = lpe.dimensionalize_state(np.array([result.x])).numpy()
+    T_sol = lpe.dimensionalize_time(T).numpy()
 
-    return x_i_p1, T_i_p1
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol
