@@ -14,7 +14,8 @@ from GravNN.CelestialBodies.Asteroids import Eros
 from FrozenOrbits.constraints import *
 
 def get_initial_conditions(mu, element_set):
-    OE_trad = np.array([[7.93E+04/2, 1.00E-02, 1.53E+00, -7.21E-01, -1.61E-01, 2.09e+00]])
+    # OE_trad = np.array([[7.93E+04/2, 1.00E-02, 1.53E+00, -7.21E-01, -1.61E-01, 2.09e+00]])
+    OE_trad = np.array([[7.93E+04/2, 1.00E-01, 1.53E+00/2, -7.21E-01, -1.61E-01, 2.09e+00]])
     T = 2*np.pi*np.sqrt(OE_trad[0,0]**3/mu)
     OE_0 = oe2milankovitch_tf(OE_trad, mu).numpy()
     X_0 = oe2cart_tf(OE_0, mu, element_set)[0]
@@ -43,7 +44,10 @@ def main():
 
     # normalized coordinates for semi-major axis
     bounds = ([-2*1/np.sqrt(3), -2*1/np.sqrt(3), -2*1/np.sqrt(3), -1.1, -1.1, -1.1, -np.inf],
-              [2*1/np.sqrt(3), 2*1/np.sqrt(3), 2*1/np.sqrt(3), 1.1, 1.1, 1.1, np.inf])
+              [ 2*1/np.sqrt(3),  2*1/np.sqrt(3),  2*1/np.sqrt(3),  1.1,  1.1,  1.1,  np.inf])
+              
+    bounds = ([ -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf, -np.inf],
+              [  np.inf,   np.inf,   np.inf,   np.inf,   np.inf,   np.inf,  np.inf])
 
     OE_0_sol, X_0_sol, T_sol = scipy_periodic_orbit_algorithm(T, OE_0, lpe, bounds, element_set)
 
@@ -66,8 +70,6 @@ def main():
     plt.title("BVP Solution")
 
     plt.show()
-
-
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ from FrozenOrbits.constraints import *
 from FrozenOrbits.LPE import LPE
 
 import numpy as np
-np.set_printoptions(formatter={'float': "{0:0.2e}".format})
 import pandas as pd
 import copy
 import time
@@ -17,6 +16,11 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import least_squares, root
 from GravNN.Support.ProgressBar import ProgressBar
 
+np.set_printoptions(formatter={'float': "{0:0.2e}".format})
+
+######################
+## Helper Functions ##
+######################
 
 def debug_plot(sol, lpe, element_set):
     from GravNN.CelestialBodies.Asteroids import Eros
@@ -34,6 +38,23 @@ def debug_plot(sol, lpe, element_set):
     plt.show()
     return
 
+def evolve_state_w_STM(t, x_0, F, model, tol=1E-6):
+    N = len(x_0)
+    phi_0 = np.identity(N)
+    z_i = np.hstack((x_0, phi_0.reshape((-1))))
+    pbar = ProgressBar(t, enable=True)
+    sol = solve_ivp(F, [0, t], z_i, args=(model,pbar),atol=tol, rtol=tol)
+    pbar.close()
+    if not sol.success:
+        print(f"{sol.success} \t {sol.message}")
+    x_f = sol.y[:N,-1]
+    phi_f = sol.y[N:,-1].reshape((N,N))
+    return x_f, phi_f
+
+
+#######################
+## Custom algorithms ##
+#######################
 
 def variable_time_mirror_bvp(T, x0, model):
     T_i_p1 = copy.deepcopy(T) / 2
@@ -45,17 +66,9 @@ def variable_time_mirror_bvp(T, x0, model):
         start_time = time.time()
         T_i = copy.deepcopy(T_i_p1)
         x_i = copy.deepcopy(x_i_p1)
-        N = len(x_i)
-        phi_0 = np.identity(N)
-        z_i = np.hstack((x_i, phi_0.reshape((-1))))
-        pbar = ProgressBar(T_i, enable=True)
-        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,pbar),atol=1E-6, rtol=1E-6)
-        pbar.close()
-        z_f = sol.y[:,-1]
-        x_f = z_f[:N]
+        x_f, phi_f = evolve_state_w_STM(T_i, x_i, dynamics_cart_w_STM, model, tol=1E-6)
 
         x_dot_f = np.hstack((x_f[3:6], model.generate_acceleration(x_f[0:3])))
-        phi_t0_tf = z_f[N:].reshape((N,N))
 
         V_i = np.array([x_i[0], x_i[4], T_i])
         C = np.array([
@@ -63,8 +76,8 @@ def variable_time_mirror_bvp(T, x0, model):
             [x_f[3]]
             ])
         D = np.array([
-            [phi_t0_tf[1,0], phi_t0_tf[1,4], x_dot_f[1]],
-            [phi_t0_tf[3,0], phi_t0_tf[3,4], x_dot_f[3]]
+            [phi_f[1,0], phi_f[1,4], x_dot_f[1]],
+            [phi_f[3,0], phi_f[3,4], x_dot_f[3]]
             ])
         
         V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
@@ -78,7 +91,7 @@ def variable_time_mirror_bvp(T, x0, model):
 
     return x_i_p1, T_i_p1*2
 
-def general_variable_time_bvp(T, x0, model):
+def general_variable_time_cartesian_bvp(T, x0, model):
     T_i_p1 = copy.deepcopy(T) 
     x_i_p1 = copy.deepcopy(x0)
 
@@ -89,24 +102,28 @@ def general_variable_time_bvp(T, x0, model):
         T_i = copy.deepcopy(T_i_p1)
         x_i = copy.deepcopy(x_i_p1)
         N = len(x_i)
-        phi_0 = np.identity(N)
-        z_i = np.hstack((x_i, phi_0.reshape((-1))))
-        pbar = ProgressBar(T_i, enable=True)
-        sol = solve_ivp(dynamics_cart_w_STM, [0, T_i], z_i, args=(model,pbar),atol=1E-6, rtol=1E-6)
-        pbar.close()
-        z_f = sol.y[:,-1]
-        x_f = z_f[:N]
 
+        # Propagate dynamics 
+        x_f, phi_f = evolve_state_w_STM(T_i, x_i, dynamics_cart_w_STM, model, tol=1E-6)
+
+        # Get X_dot @ t_f
         r_f = x_f[0:3]
         v_f = x_f[3:6]
         a_f = model.generate_acceleration(r_f)
         x_dot_f = np.hstack((v_f, a_f)).reshape((6,1))
-        phi_t0_tf = z_f[N:].reshape((N,N))
 
+        # Build BVP "state" vector
         V_i = np.hstack((x_i, T_i))
+
+        # Define constraint vector and corresponding partials w.r.t. BVP state vector (dC/dV)
         C = x_f - x_i
-        D = np.block([phi_t0_tf - np.eye(len(x0)), x_dot_f])
-        V_i_p1 = V_i - np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
+        D = np.block([phi_f - np.eye(len(x0)), x_dot_f])
+
+        # Compute correction term and apply 
+        dV = np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
+        V_i_p1 = V_i - dV
+
+        # Map back to state
         x_i_p1 = V_i_p1[0:len(x0)]
         T_i_p1 = V_i_p1[len(x0)]
         
@@ -117,45 +134,35 @@ def general_variable_time_bvp(T, x0, model):
 
     return x_i_p1, T_i_p1
 
-def general_variable_time_bvp_trad_OE(T, x0_dim, model, constraint):
+def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model):
 
-    x0 = model.non_dimensionalize_state(x0_dim).numpy()
-    T = model.non_dimensionalize_time(T).numpy()
-    print(f"Total Time {T} \n Dim State {x0_dim} \n Non Dim State {x0}")
+    OE_0 = model.non_dimensionalize_state(OE_0_dim).numpy()
+    T = model.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \n Dim State {OE_0_dim} \n Non Dim State {OE_0}")
     T_i_p1 = copy.deepcopy(T) 
-    x_i_p1 = copy.deepcopy(x0.reshape((-1,)))
+    OE_i_p1 = copy.deepcopy(OE_0.reshape((-1,)))
 
     k = 0
     tol = 1
     while tol > 1E-6 and k < 10: 
-        start_time = time.time()
         T_i = copy.deepcopy(T_i_p1) 
-        x_i = copy.deepcopy(x_i_p1)
-        N = len(x_i)
-        phi_0 = np.identity(N)
-        z_i = np.hstack((x_i.reshape((-1,)), phi_0.reshape((-1))))
-        pbar = ProgressBar(T_i, enable=True)
-        sol = solve_ivp(dynamics_OE_w_STM, 
-                        [0, T_i],
-                        z_i,
-                        args=(model,pbar),
-                        atol=1E-3, rtol=1E-3)
-        pbar.close()
-        print(f"{sol.success} \t {sol.message}")
-        z_f = sol.y[:,-1]
-        x_i_p1, T_i_p1 = constraint(z_f, x_i, x_i_p1, 
-                                        T_i, start_time, model, k)
+        x_i = copy.deepcopy(OE_i_p1)
+        x_f, phi_f = evolve_state_w_STM(T_i, x_i, dynamics_OE_w_STM, model, tol=1E-3)
+        OE_i_p1, T_i_p1 = OE_constraint(x_f, phi_f, x_i, T_i, model, k, 
+                            decision_variable_mask=None,
+                            constraint_variable_mask=None)
         k += 1
 
-    x_i_p1 = model.dimensionalize_state(np.array([x_i_p1])).numpy()
+    OE_i_p1 = model.dimensionalize_state(np.array([OE_i_p1])).numpy()
     T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
+    x_i_p1 = trad2cart_tf(OE_i_p1, model.mu_tilde).numpy()
 
-    return x_i_p1, T_i_p1
+    return OE_i_p1, x_i_p1, T_i_p1
+
 
 ######################
 ## Scipy algorithms ##
 ######################
-
 
 def F_milankovitch(x, T, lpe):
     pbar = ProgressBar(T, enable=False)
@@ -172,7 +179,8 @@ def F_milankovitch(x, T, lpe):
 
     # for debugging
     # debug_plot(sol, lpe, 'milankovitch')
-
+    print(f"x0: {x}")
+    print(f"xf: {sol.y[:,-1]}")
     print(f"dx_norm {np.linalg.norm(dx)} \t dH_mag {np.linalg.norm(dx[0:3])} \t de_mag = {np.linalg.norm(dx[3:6])} \t dL = {dx[6]}")# \n {dx}")
     return dx
 

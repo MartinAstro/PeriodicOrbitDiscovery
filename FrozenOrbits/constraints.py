@@ -1,14 +1,61 @@
 import numpy as np
 import time
+import copy
 
+from FrozenOrbits.utils import calc_angle_diff
 
-def print_update(x_i, x_i_p1, T_i, start_time, k, C, dV, T_i_p1):
+def print_update(x_0, X_corrected, T_i, T_corrected, k, C):
     tol = np.linalg.norm(C)
-    dx = np.linalg.norm((x_i_p1 - x_i))
-    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_i_p1 - T_i} \t Time Elapsed: {time.time() - start_time}")
-    print(f"Old Non-Dim State: {x_i}")
-    print(f"{dV}")
-    print(f"New Non-Dim State: {x_i_p1}")
+    dx = np.linalg.norm((X_corrected - x_0))
+    print(f"Iteration {k}: tol = {tol} \t dx_k = {dx} \t dT = {T_corrected - T_i}")
+    print(f"Old Non-Dim State: {x_0}")
+    print(f"New Non-Dim State: {X_corrected}")
+
+def OE_constraint(x_f, phi_f, x_0, T_i, model, k, decision_variable_mask=None, constraint_variable_mask=None):
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(x_f)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(x_f) # N
+
+    N = len(x_0)
+    x_dot_f = model.dOE_dt(x_f)
+
+    # Nominal decision variables
+    V = np.hstack((x_0, T_i))
+
+    # Nominal constraint variables
+    C = x_f - x_0 
+
+    # TODO: Determine a consistent way to do angle wrapping
+    C[5] = calc_angle_diff(x_0[5], x_f[5])
+
+    # Nominal partials
+    D = np.hstack([phi_f - np.eye(N), x_dot_f.reshape((N,-1))])
+
+
+    # Remove decision variables 
+    V = V[decision_variable_mask]
+    D = D[:, decision_variable_mask] # remove columns in D
+
+    # Remove constraint variables
+    C = C[constraint_variable_mask]
+    D = D[constraint_variable_mask, :] # remove rows in D
+
+    # Compute decision variable update
+    dV = np.transpose(D.T@np.linalg.pinv(D@D.T)@C).squeeze()
+    V_corrected = V - dV
+
+    # Map V back onto the state
+    x_corrected = copy.deepcopy(x_0)
+    for i in range(len(x_0)):
+        if decision_variable_mask[i]:
+            x_corrected[i] = V_corrected[i]
+    
+    T_corrected = V_corrected[-1]
+
+    print_update(x_0, x_corrected, T_i, T_corrected, k, C)
+    return x_corrected, T_corrected
 
 def OE(z_f, x_i, x_i_p1, T_i, start_time, model, k):
     N = len(x_i)
