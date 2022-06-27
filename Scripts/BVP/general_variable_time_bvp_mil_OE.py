@@ -1,7 +1,7 @@
 import os
 from FrozenOrbits.analysis import check_for_intersection, print_state_differences
 from FrozenOrbits.bvp import general_variable_time_bvp_trad_OE
-from FrozenOrbits.coordinate_transforms import trad2cart_tf
+from FrozenOrbits.coordinate_transforms import oe2milankovitch_tf, trad2cart_tf
 
 import GravNN
 import matplotlib.pyplot as plt
@@ -9,16 +9,17 @@ import numpy as np
 from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.gravity_models import (pinnGravityModel,
                                          polyhedralGravityModel)
-from FrozenOrbits.LPE import LPE, LPE_Traditional
+from FrozenOrbits.LPE import LPE, LPE_Milankovitch, LPE_Traditional
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import plot_cartesian_state_3d
 from GravNN.CelestialBodies.Asteroids import Eros
 
 
 def get_initial_conditions(R, mu):
-    OE = np.array([[5*R, 0.3, np.pi/4, np.pi/4, np.pi/4, np.pi/4]])
-    T = 2*np.pi*np.sqrt(OE[0,0]**3/mu)
-    x = trad2cart_tf(OE,mu).numpy()[0]
+    OE_trad = np.array([[5*R, 0.3, np.pi/4, np.pi/4, np.pi/4, np.pi/4]])
+    T = 2*np.pi*np.sqrt(OE_trad[0,0]**3/mu)
+    OE = oe2milankovitch_tf(OE_trad, mu).numpy()
+    x = trad2cart_tf(OE_trad,mu).numpy()[0]
     return OE, x, T
 
 
@@ -27,23 +28,24 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     planet = Eros()
     np.random.seed(15)
+    # tf.config.run_functions_eagerly(True)
 
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
     "/../Data/Dataframes/eros_BVP_PINN_III.data")  
     # model = polyhedralGravityModel(planet, planet.obj_8k)
     OE_0, x_0, T = get_initial_conditions(planet.radius*3, planet.mu)
 
-    lpe = LPE_Traditional(model.gravity_model, planet.mu, 
-                                l_star=OE_0[0,0], 
-                                t_star=T, 
-                                m_star=1.0)#planet.mu/(6.67430*1E-11))
+    lpe = LPE_Milankovitch(model.gravity_model, planet.mu, 
+                            l_star=np.sqrt(T*np.linalg.norm(OE_0[0:3])/1.0),  # H = t/l**2 * H_tilde
+                            t_star=T, 
+                            m_star=1.0)#planet.mu/(6.67430*1E-11))
                                 
 
     # Run the solver
-    decision_variable_mask = [False, False, True, True, True, True, True] # [OE, T] [N+1]
-    constraint_angle_wrap_mask = [False, False, False, True, True, True] # wrap w, Omega, M # [xf-x0]
+    decision_variable_mask = [False, False, False, True, True, True, True, False] # [H, e, T] [N+1]
+    constraint_angle_wrap_mask = [False, False, False, False, False, False, True] # L # [xf-x0]
     OE_0_sol, x_0_sol, T_sol = general_variable_time_bvp_trad_OE(T, OE_0, lpe, 
-                                element_set='traditional',
+                                element_set='milankovitch',
                                 decision_variable_mask=decision_variable_mask,
                                 constraint_angle_wrap_mask=constraint_angle_wrap_mask)
 

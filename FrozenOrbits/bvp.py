@@ -1,4 +1,5 @@
 
+from unittest import TestResult
 from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.coordinate_transforms import *
 from FrozenOrbits.constraints import *
@@ -134,7 +135,7 @@ def general_variable_time_cartesian_bvp(T, x0, model):
 
     return x_i_p1, T_i_p1
 
-def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model):
+def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model, element_set, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
 
     OE_0 = model.non_dimensionalize_state(OE_0_dim).numpy()
     T = model.non_dimensionalize_time(T_dim).numpy()
@@ -147,15 +148,16 @@ def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model):
     while tol > 1E-6 and k < 10: 
         T_i = copy.deepcopy(T_i_p1) 
         x_i = copy.deepcopy(OE_i_p1)
-        x_f, phi_f = evolve_state_w_STM(T_i, x_i, dynamics_OE_w_STM, model, tol=1E-3)
+        x_f, phi_f = evolve_state_w_STM(T_i, x_i, dynamics_OE_w_STM, model, tol=1E-6)
         OE_i_p1, T_i_p1 = OE_constraint(x_f, phi_f, x_i, T_i, model, k, 
-                            decision_variable_mask=None,
-                            constraint_variable_mask=None)
+                            decision_variable_mask=decision_variable_mask,
+                            constraint_variable_mask=constraint_variable_mask,
+                            constraint_angle_wrap_mask=constraint_angle_wrap_mask)
         k += 1
 
     OE_i_p1 = model.dimensionalize_state(np.array([OE_i_p1])).numpy()
     T_i_p1 = model.dimensionalize_time(T_i_p1).numpy()
-    x_i_p1 = trad2cart_tf(OE_i_p1, model.mu_tilde).numpy()
+    x_i_p1 = oe2cart_tf(OE_i_p1, model.mu_tilde, element_set).numpy()[0]
 
     return OE_i_p1, x_i_p1, T_i_p1
 
