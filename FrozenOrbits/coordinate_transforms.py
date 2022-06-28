@@ -225,10 +225,35 @@ def delaunay2oe_tf(DelaunayOE, mu):
 
 def cart2delaunay_tf(X, mu):
     trad = cart2trad_tf(X, mu)
-    delaunay_oe = oe2delaunay_tf(trad)
+    delaunay_oe = oe2delaunay_tf(trad, mu)
     return delaunay_oe
 
 # Equinoctial
+
+def _compute_k_cond(OE):
+    I = OE[0]
+    i = OE[1]
+    Omega = OE[2]
+    k = tf.cond(I == 1.0, lambda : tf.tan(i/2.0)*tf.sin(Omega), lambda:  tf.atan2(i, 2.0)*tf.sin(Omega))
+    return k
+
+def _compute_k(I, i, Omega):
+    OE_subset = tf.stack([I, i, Omega],axis=1)
+    k = tf.map_fn(fn=lambda OE_subset: _compute_k_cond(OE_subset), elems=OE_subset)
+    return k
+
+def _compute_h_cond(OE):
+    I = OE[0]
+    i = OE[1]
+    Omega = OE[2]
+    h = tf.cond(I == 1.0, lambda:  tf.tan(i/2.0)*tf.cos(Omega), lambda:  tf.atan2(i, 2.0)*tf.cos(Omega))
+    return h
+
+def _compute_h(I, i, Omega):
+    OE_subset = tf.stack([I, i, Omega],axis=1)
+    h = tf.map_fn(fn=lambda OE_subset: _compute_h_cond(OE_subset), elems=OE_subset)
+    return h
+
 def oe2equinoctial_tf(OE):
     """Convert traditional elements to equinoctial elements
 
@@ -242,18 +267,17 @@ def oe2equinoctial_tf(OE):
 
     # prograde i in [0, 90]
     # retrograde i in [90, 180]
-    pi = tf.constant(np.pi, dtype=a.dtype)
     I = get_I(i)
 
     p = semilatus_rectum(OE)
     f = e*tf.cos(omega + I*Omega)
     g = e*tf.sin(omega + I*Omega)
 
-    v = computeTrueAnomaly(OE)[0]
+    v = computeTrueAnomaly(OE)
 
     L = v + I*Omega + omega
-    h = tf.cond(I == 1.0, lambda : tf.tan(i/2.0)*tf.cos(Omega), lambda:  tf.atan2(i, 2.0)*tf.cos(Omega))
-    k = tf.cond(I == 1.0, lambda : tf.tan(i/2.0)*tf.sin(Omega), lambda:  tf.atan2(i, 2.0)*tf.sin(Omega))
+    h = _compute_h(I, i, Omega) 
+    k = _compute_k(I, i, Omega)
 
     equi_OE = tf.stack([p, f, g, L, h, k], 1)
     return equi_OE
@@ -592,7 +616,6 @@ def cart2trad_tf(X, mu):
 
 
 # Macro functions
-
 def oe2cart_tf(OE, mu, element_set="traditional"):
     if element_set == "traditional":
         cart_state = trad2cart_tf(OE, mu)
