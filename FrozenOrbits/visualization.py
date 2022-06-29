@@ -225,7 +225,7 @@ def plot_cartesian_state_1d(t, X, **kwargs):
     plot_1d(t, X[:,4], **kwargs)
     plt.ylabel("$\dot{y}$")
     plt.subplot(2,3,6)
-    plot_1d(t, X[:,6], **kwargs)
+    plot_1d(t, X[:,5], **kwargs)
     plt.ylabel("$\dot{z}$")
     plt.xlabel("Time")
 

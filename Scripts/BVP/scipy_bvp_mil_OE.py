@@ -12,6 +12,7 @@ from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
 from GravNN.CelestialBodies.Asteroids import Eros
 from FrozenOrbits.constraints import *
+from initial_conditions import * 
 
 def get_initial_conditions(mu, element_set):
     # OE_trad = np.array([[7.93E+04/2, 1.00E-02, 1.53E+00, -7.21E-01, -1.61E-01, 2.09e+00]])
@@ -28,8 +29,9 @@ def main():
     # tf.config.run_functions_eagerly(True)
 
     element_set = 'milankovitch'
-    OE_0, X_0, T = get_initial_conditions(planet.mu, element_set)
-    
+    OE_0, X_0, T, planet = near_periodic_IC()
+    OE_0 = oe2milankovitch_tf(OE_0, planet.mu).numpy()
+
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
 
@@ -46,10 +48,16 @@ def main():
     bounds = ([-2*1/np.sqrt(3), -2*1/np.sqrt(3), -2*1/np.sqrt(3), -1.1, -1.1, -1.1, -np.inf],
               [ 2*1/np.sqrt(3),  2*1/np.sqrt(3),  2*1/np.sqrt(3),  1.1,  1.1,  1.1,  np.inf])
               
-    bounds = ([ -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf, -np.inf],
-              [  np.inf,   np.inf,   np.inf,   np.inf,   np.inf,   np.inf,  np.inf])
+    bounds = ([ -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf,  -np.inf, -np.inf, -np.inf],
+              [  np.inf,   np.inf,   np.inf,   np.inf,   np.inf,   np.inf,  np.inf, np.inf])
 
-    OE_0_sol, X_0_sol, T_sol = scipy_periodic_orbit_algorithm(T, OE_0, lpe, bounds, element_set)
+
+    decision_variable_mask = [True, True, True, True, True, True, True, True] # [OE, T] [N+1]
+    constraint_angle_wrap_mask = [False, False, False, False, False, False, True] # wrap w, Omega, M # 
+
+    OE_0_sol, X_0_sol, T_sol = scipy_periodic_orbit_algorithm_v2(T, OE_0, lpe, 
+                                            bounds, element_set, decision_variable_mask, 
+                                            constraint_angle_wrap_mask=constraint_angle_wrap_mask)
 
     print(f"Initial OE: {OE_0}")
     print(f"BVP OE: {OE_0_sol}")

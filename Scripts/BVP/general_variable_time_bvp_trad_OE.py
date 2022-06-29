@@ -13,25 +13,26 @@ from FrozenOrbits.LPE import LPE, LPE_Traditional
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import plot_cartesian_state_3d
 from GravNN.CelestialBodies.Asteroids import Eros
+from Scripts.BVP.initial_conditions import not_periodic_IC
 
 
-def get_initial_conditions(R, mu):
-    OE = np.array([[5*R, 0.3, np.pi/4, np.pi/4, np.pi/4, np.pi/4]])
-    T = 2*np.pi*np.sqrt(OE[0,0]**3/mu)
-    x = trad2cart_tf(OE,mu).numpy()[0]
-    return OE, x, T
+# def get_initial_conditions(R, mu):
+#     OE = np.array([[5*R, 0.3, np.pi/4, np.pi/4, np.pi/4, np.pi/4]]) # Good example
+#     # OE = np.array([[R/2, 0.1, np.pi/4, np.pi/4, np.pi/4, np.pi/4]])
+#     T = 2*np.pi*np.sqrt(OE[0,0]**3/mu)
+#     x = trad2cart_tf(OE,mu).numpy()[0]
+#     return OE, x, T
 
 
 
 def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
-    planet = Eros()
     np.random.seed(15)
 
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
     "/../Data/Dataframes/eros_BVP_PINN_III.data")  
     # model = polyhedralGravityModel(planet, planet.obj_8k)
-    OE_0, x_0, T = get_initial_conditions(planet.radius*3, planet.mu)
+    OE_0, x_0, T, planet = not_periodic_IC()
 
     lpe = LPE_Traditional(model.gravity_model, planet.mu, 
                                 l_star=OE_0[0,0], 

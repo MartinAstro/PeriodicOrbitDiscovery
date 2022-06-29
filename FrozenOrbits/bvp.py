@@ -217,7 +217,8 @@ def jac(x, T, lpe):
                     [0, T],
                     z_i,
                     args=(lpe,pbar),
-                    atol=1E-7, rtol=1E-7)
+                    # atol=1E-7, rtol=1E-7)
+                    atol=1E-3, rtol=1E-3)
     pbar.close()
     z_f = sol.y[:,-1]
     phi_ti_t0 = np.reshape(z_f[N:], (N,N))
@@ -252,6 +253,153 @@ def scipy_periodic_orbit_algorithm(T_dim, OE_0_dim, lpe, solution_bounds, elemen
 
     OE_0_sol = lpe.dimensionalize_state(np.array([result.x])).numpy()
     T_sol = lpe.dimensionalize_time(T).numpy()
+
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol
+
+
+
+##############################
+## Scipy algorithms ROUND 2 ##
+##############################
+
+def F_general(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask, 
+    constraint_angle_wrap_mask):
+    k = 0
+    x_i = copy.deepcopy(x_0)[:-1]# Remove time from the state when integrating
+    for i in range(len(x_i)):
+        # Only update allowed decision variables
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    if decision_variable_mask[-1]:
+        T = V_0[-1]
+    else:
+        T = x_0[-1]
+
+    # Propagate the updated state
+    pbar = ProgressBar(T, enable=False)
+    sol = solve_ivp(dynamics_OE, 
+            [0, T],
+            x_i, 
+            args=(lpe, pbar),
+            t_eval=np.linspace(0, T, 100),
+            atol=1E-7, rtol=1E-7)
+    pbar.close()
+    x_f = sol.y[:,-1]
+
+    # Calculate the constraint vector
+    C = x_f - x_i 
+
+    # Wrap angles depending on the element set
+    for i in range(len(C)):
+        if constraint_angle_wrap_mask[i]:
+            C[i] = calc_angle_diff(x_0[i], x_f[i])
+
+    return C
+
+def jac_general(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask,
+    constraint_angle_wrap_mask):
+    N = len(x_0) - 1 # Remove from the state
+    phi_0 = np.identity(N)
+
+    # Only update allowed decision variables
+    k = 0
+    x_i = copy.deepcopy(x_0)[:-1]
+    for i in range(len(x_i)):
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    if decision_variable_mask[-1]:
+        T = V_0[-1]
+    else:
+        T = x_0[-1]
+
+    # Propagate the corrected state
+    z_i = np.hstack((
+        x_i.reshape((-1,)),
+        phi_0.reshape((-1)))
+        )
+
+    pbar = ProgressBar(T, enable=True)
+    sol = solve_ivp(dynamics_OE_w_STM, 
+                    [0, T],
+                    z_i,
+                    args=(lpe,pbar),
+                    atol=1E-7, rtol=1E-7)
+                    # atol=1E-3, rtol=1E-3)
+    pbar.close()
+    z_f = sol.y[:,-1]
+    x_f = z_f[:N]
+    phi_ti_t0 = np.reshape(z_f[N:], (N,N))
+    x_dot_f = lpe.dOE_dt(x_f)
+
+    # Evaluate the general jacobian
+    D = np.hstack([phi_ti_t0 - np.eye(N), x_dot_f.reshape((N,-1))])
+
+    # Remove specified decision variables from jacobian
+    D = D[:, decision_variable_mask] # remove columns in D
+
+    # # Remove constraint variables
+    # D = D[constraint_variable_mask, :] # remove rows in D
+
+    return D
+
+def scipy_periodic_orbit_algorithm_v2(T_dim, OE_0_dim, lpe, solution_bounds, element_set,
+decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(OE_0_dim)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(OE_0_dim) # N
+    if constraint_angle_wrap_mask is None:
+        constraint_angle_wrap_mask = [False]*len(OE_0_dim) # N
+
+    X_0 = np.hstack((OE_0.reshape((-1)), T)) # Decision variables that can be updated
+    V_0 = X_0[decision_variable_mask]
+    V_solution_bounds = np.array(solution_bounds)[:,decision_variable_mask]
+
+    result = least_squares(F_general, V_0, jac_general, 
+                            args=(
+                                lpe, 
+                                X_0,
+                                decision_variable_mask,
+                                constraint_variable_mask,
+                                constraint_angle_wrap_mask),
+                            bounds=V_solution_bounds,
+                            verbose=2,
+                            )
+    
+    print(f"""
+    Success? ({result.success} \t Status: {result.status} 
+    Message: {result.message}
+    OE_0 = {result.x} 
+    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
+    """)
+
+    k = 0
+    X_f = copy.deepcopy(X_0)
+    for i in range(len(X_f)):
+        if decision_variable_mask[i]:
+            X_f[i] = result.x[k]
+            k += 1
+
+    OE_f = np.array([X_f[:-1]]) # the non-dim OE
+    T_f =X_f[-1] # The non-dim time
+
+    OE_0_sol = lpe.dimensionalize_state(OE_f).numpy()
+    T_sol = lpe.dimensionalize_time(T_f).numpy()
 
     X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
 
