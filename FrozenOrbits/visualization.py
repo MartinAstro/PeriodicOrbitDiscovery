@@ -53,13 +53,14 @@ def plot_energy(sol, model):
 def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
     plt.plot(x,y)
 
+    hlines_local = copy.deepcopy(hlines)
     if y0_hline:
-        hlines.append(y[0])
+        hlines_local.append(y[0])
 
-    for hline in hlines:
-        plt.hlines(hline, np.min(x), np.max(x))
+    for hline in hlines_local:
+        plt.hlines(hline, np.min(x), np.max(x),linestyle='--')
     for vline in vlines: 
-        plt.vlines(vline, np.min(y), np.max(y))
+        plt.vlines(vline, np.min(y), np.max(y),linestyle='--')
 
 
 ##########################

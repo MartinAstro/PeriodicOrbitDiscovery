@@ -14,7 +14,7 @@ from FrozenOrbits.utils import calc_angle_diff
 
 from GravNN.Support.transformations import cart2sph, invert_projection
 from scipy.integrate import solve_ivp
-from scipy.optimize import least_squares, root
+from scipy.optimize import least_squares, root, minimize, basinhopping
 from GravNN.Support.ProgressBar import ProgressBar
 
 np.set_printoptions(formatter={'float': "{0:0.2e}".format})
@@ -404,3 +404,434 @@ decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wra
     X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
 
     return OE_0_sol, X_0_sol, T_sol
+
+
+
+##############################
+## Scipy algorithms ROUND 3 ##
+##############################
+
+def F_general_v3(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask, 
+    constraint_angle_wrap_mask):
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        # Only update allowed decision variables
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+    # Calculate the constraint vector
+    C = lpe.dOE_dt(x_i)
+
+    return C
+
+def jac_general_v3(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask,
+    constraint_angle_wrap_mask):
+
+    # Only update allowed decision variables
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    # Evaluate the general jacobian
+    D = lpe.dOE_dt_dx(x_i)
+
+    # Remove specified decision variables from jacobian
+    D = D[:, decision_variable_mask] # remove columns in D
+
+    # # Remove constraint variables
+    # D = D[constraint_variable_mask, :] # remove rows in D
+
+    return D
+
+def scipy_periodic_orbit_algorithm_v3(T_dim, OE_0_dim, lpe, solution_bounds, element_set,
+decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    """Least squares solution without shooting method. Identify solutions with no integration,
+    just minima to the LPE."""
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(OE_0_dim)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(OE_0_dim) # N
+    if constraint_angle_wrap_mask is None:
+        constraint_angle_wrap_mask = [False]*len(OE_0_dim) # N
+
+    X_0 = OE_0.reshape((-1)) # Decision variables that can be updated
+    V_0 = X_0[decision_variable_mask]
+    V_solution_bounds = np.array(solution_bounds)[:,decision_variable_mask]
+
+    result = least_squares(F_general_v3, V_0, jac_general_v3, 
+                            args=(
+                                lpe, 
+                                X_0,
+                                decision_variable_mask,
+                                constraint_variable_mask,
+                                constraint_angle_wrap_mask),
+                            bounds=V_solution_bounds,
+                            verbose=2,
+                            xtol=None,
+                            ftol=None,
+                            # method='dogbox'
+                            )
+    
+    print(f"""
+    Success? ({result.success} \t Status: {result.status} 
+    Message: {result.message}
+    OE_0 = {result.x} 
+    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
+    """)
+
+    k = 0
+    X_f = copy.deepcopy(X_0)
+    for i in range(len(X_f)):
+        if decision_variable_mask[i]:
+            X_f[i] = result.x[k]
+            k += 1
+
+    OE_f = np.array([X_f]) # the non-dim OE
+    T_f = T # The non-dim time
+
+    OE_0_sol = lpe.dimensionalize_state(OE_f).numpy()
+    T_sol = lpe.dimensionalize_time(T_f).numpy()
+
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol, result
+
+
+##############################
+## Scipy algorithms "root"  ##
+##############################
+
+# Vector cost function + root finding
+# No bounds
+
+def F_general_v4(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask, 
+    constraint_angle_wrap_mask):
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        # Only update allowed decision variables
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+    # Calculate the constraint vector
+    C = lpe.dOE_dt(x_i)
+
+    C = C[decision_variable_mask] # remove masked variales
+    return C
+
+def jac_general_v4(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask,
+    constraint_angle_wrap_mask):
+
+    # Only update allowed decision variables
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    # Evaluate the general jacobian
+    D = lpe.dOE_dt_dx(x_i)
+
+    # Remove specified decision variables from jacobian
+    D = D[:, decision_variable_mask] # remove columns in D
+    D = D[decision_variable_mask,:] # remove columns in D
+
+    # # Remove constraint variables
+    # D = D[constraint_variable_mask, :] # remove rows in D
+
+    return D
+
+def scipy_periodic_orbit_algorithm_v4(T_dim, OE_0_dim, lpe, solution_bounds, element_set,
+decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    """Use scipy's minimize function rather than least squares to converge on a solution."""
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(OE_0_dim)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(OE_0_dim) # N
+    if constraint_angle_wrap_mask is None:
+        constraint_angle_wrap_mask = [False]*len(OE_0_dim) # N
+
+    X_0 = OE_0.reshape((-1)) # Decision variables that can be updated
+    V_0 = X_0[decision_variable_mask]
+    V_solution_bounds = np.array(solution_bounds)[:,decision_variable_mask]
+    V_bounds_tuple = []
+    for i in range(len(V_solution_bounds[0])):
+        V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
+
+    result = root(F_general_v4, V_0, jac=jac_general_v4, 
+                            args=(
+                                lpe, 
+                                X_0,
+                                decision_variable_mask,
+                                constraint_variable_mask,
+                                constraint_angle_wrap_mask),
+                            #bounds=V_bounds_tuple,
+                            # tol=None,
+                            # method='dogbox'
+                            )
+    
+    print(f"""
+    Success? ({result.success} \t Status: {result.status} 
+    Message: {result.message}
+    OE_0 = {result.x} 
+    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
+    """)
+
+    k = 0
+    X_f = copy.deepcopy(X_0)
+    for i in range(len(X_f)):
+        if decision_variable_mask[i]:
+            X_f[i] = result.x[k]
+            k += 1
+
+    OE_f = np.array([X_f]) # the non-dim OE
+    T_f = T # The non-dim time
+
+    OE_0_sol = lpe.dimensionalize_state(OE_f).numpy()
+    T_sol = lpe.dimensionalize_time(T_f).numpy()
+
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol, result
+
+
+##################################
+## Scipy algorithms "minimize"  ##
+##################################
+
+# Scalar cost function + gradient descent
+# With bounds
+
+def F_general_minimize(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask, 
+    constraint_angle_wrap_mask):
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        # Only update allowed decision variables
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+    # Calculate the constraint vector
+    C = lpe.dOE_dt(x_i)
+
+
+
+    return np.linalg.norm(C)
+
+def jac_general_minimize(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask,
+    constraint_angle_wrap_mask):
+
+    # Only update allowed decision variables
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    # Evaluate the general jacobian
+    D = lpe.dOE_dt_dx(x_i)
+
+    # Remove specified decision variables from jacobian
+    D = D[:, decision_variable_mask] # remove columns in D
+
+    # # Remove constraint variables
+    # D = D[constraint_variable_mask, :] # remove rows in D
+
+    return D
+
+def scipy_periodic_orbit_algorithm_minimize(T_dim, OE_0_dim, lpe, solution_bounds, element_set,
+decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    """Least squares solution without shooting method. Identify solutions with no integration,
+    just minima to the LPE."""
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(OE_0_dim)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(OE_0_dim) # N
+    if constraint_angle_wrap_mask is None:
+        constraint_angle_wrap_mask = [False]*len(OE_0_dim) # N
+
+    X_0 = OE_0.reshape((-1)) # Decision variables that can be updated
+    V_0 = X_0[decision_variable_mask]
+    V_solution_bounds = np.array(solution_bounds)[:,decision_variable_mask]
+    V_bounds_tuple = []
+    for i in range(len(V_solution_bounds[0])):
+        V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
+    result = minimize(F_general_minimize, V_0, 
+                            args=(
+                                lpe, 
+                                X_0,
+                                decision_variable_mask,
+                                constraint_variable_mask,
+                                constraint_angle_wrap_mask),
+                            bounds=V_bounds_tuple,
+                            # verbose=2,
+                            # xtol=None,
+                            # ftol=None,
+                            # method='dogbox'
+                            )
+    
+    print(f"""
+    Success? ({result.success} \t Status: {result.status} 
+    Message: {result.message}
+    OE_0 = {result.x} 
+    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
+    """)
+
+    k = 0
+    X_f = copy.deepcopy(X_0)
+    for i in range(len(X_f)):
+        if decision_variable_mask[i]:
+            X_f[i] = result.x[k]
+            k += 1
+
+    OE_f = np.array([X_f]) # the non-dim OE
+    T_f = T # The non-dim time
+
+    OE_0_sol = lpe.dimensionalize_state(OE_f).numpy()
+    T_sol = lpe.dimensionalize_time(T_f).numpy()
+
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol, result
+
+#######################################
+## Scipy algorithms "basin hopping"  ##
+#######################################
+
+
+def F_general_basin_hopping(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask, 
+    constraint_angle_wrap_mask):
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        # Only update allowed decision variables
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+    # Calculate the constraint vector
+    C = lpe.dOE_dt(x_i)
+
+
+
+    return np.linalg.norm(C)
+
+def jac_general_basin_hopping(V_0, lpe, x_0, 
+    decision_variable_mask, 
+    constraint_variable_mask,
+    constraint_angle_wrap_mask):
+
+    # Only update allowed decision variables
+    k = 0
+    x_i = copy.deepcopy(x_0)
+    for i in range(len(x_i)):
+        if decision_variable_mask[i]:
+            x_i[i] = V_0[k]
+            k += 1
+
+    # Evaluate the general jacobian
+    D = lpe.dOE_dt_dx(x_i)
+
+    # Remove specified decision variables from jacobian
+    D = D[:, decision_variable_mask] # remove columns in D
+
+    # # Remove constraint variables
+    # D = D[constraint_variable_mask, :] # remove rows in D
+
+    return D
+
+def scipy_periodic_orbit_algorithm_basin_hopping(T_dim, OE_0_dim, lpe, solution_bounds, element_set,
+decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    """Least squares solution without shooting method. Identify solutions with no integration,
+    just minima to the LPE."""
+
+    OE_0 = lpe.non_dimensionalize_state(OE_0_dim).numpy()
+    T = lpe.non_dimensionalize_time(T_dim).numpy()
+    print(f"Total Time {T} \nDim State {OE_0_dim} \nNon Dim State {OE_0}")
+
+    if decision_variable_mask is None:
+        decision_variable_mask = [True]*(len(OE_0_dim)+1) # N + 1
+    if constraint_variable_mask is None:
+        constraint_variable_mask = [True]*len(OE_0_dim) # N
+    if constraint_angle_wrap_mask is None:
+        constraint_angle_wrap_mask = [False]*len(OE_0_dim) # N
+
+    X_0 = OE_0.reshape((-1)) # Decision variables that can be updated
+    V_0 = X_0[decision_variable_mask]
+    V_solution_bounds = np.array(solution_bounds)[:,decision_variable_mask]
+    V_bounds_tuple = []
+    for i in range(len(V_solution_bounds[0])):
+        V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
+    result = basinhopping(F_general_basin_hopping, V_0, 
+                            minimizer_kwargs={'args' : (
+                                lpe, 
+                                X_0,
+                                decision_variable_mask,
+                                constraint_variable_mask,
+                                constraint_angle_wrap_mask)},
+                            disp=True
+                            # bounds=V_bounds_tuple,
+                            # verbose=2,
+                            # xtol=None,
+                            # ftol=None,
+                            # method='dogbox'
+                            )
+    
+    print(f"""
+    Success? ({result.success} \t Status: {result.status} 
+    Message: {result.message}
+    OE_0 = {result.x} 
+    Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
+    """)
+
+    k = 0
+    X_f = copy.deepcopy(X_0)
+    for i in range(len(X_f)):
+        if decision_variable_mask[i]:
+            X_f[i] = result.x[k]
+            k += 1
+
+    OE_f = np.array([X_f]) # the non-dim OE
+    T_f = T # The non-dim time
+
+    OE_0_sol = lpe.dimensionalize_state(OE_f).numpy()
+    T_sol = lpe.dimensionalize_time(T_f).numpy()
+
+    X_0_sol = oe2cart_tf(OE_0_sol, lpe.mu_tilde, element_set).numpy()[0]
+
+    return OE_0_sol, X_0_sol, T_sol, result
+
