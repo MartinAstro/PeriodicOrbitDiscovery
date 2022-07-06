@@ -458,9 +458,9 @@ class ShootingSolver(ABC):
     def prepare_outputs(self, X_0, T, result):
         print_result_info(result)
 
-        OE_f = update_state(X_0, result.x, self.decision_variable_mask)[0,:-1] #remove time
-        OE_f = np.array([OE_f]) # the non-dim OE
+        OE_f = update_state(X_0, result.x, self.decision_variable_mask) #remove time
         T_f = OE_f[0,-1]# The non-dim time
+        OE_f = np.array([OE_f[0,:-1]]) # the non-dim OE
 
         OE_0_sol, T_sol = dimensionalize(OE_f, T_f, self.lpe)
         X_0_sol = oe2cart_tf(OE_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
@@ -590,7 +590,7 @@ class ShootingLsSolver(ShootingSolver):
                                         self.constraint_angle_wrap_mask),
                                     bounds=V_solution_bounds,
                                     verbose=2,
-                                    # xtol=1
+                                    xtol=1
                                     # xtol=None,
                                     # ftol=None,
                                     # method='dogbox'
