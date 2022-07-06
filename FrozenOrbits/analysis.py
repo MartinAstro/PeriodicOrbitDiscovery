@@ -9,6 +9,20 @@ def print_state_differences(sol):
     print(f"Integrated Velocity Difference {vel_diff} [m/s]")
 
 
+def print_OE_differences(OE_sol, lpe, prefix):
+
+    OE_dim_start = OE_sol[0,:]
+    OE_dim_end = OE_sol[-1,:]
+    OE_dim_diff = OE_dim_end - OE_dim_start
+
+    OE_start = lpe.non_dimensionalize_state(OE_dim_start.reshape((1,-1))).numpy()[0]
+    OE_end = lpe.non_dimensionalize_state(OE_dim_end.reshape((1,-1))).numpy()[0]
+    OE_diff = OE_end - OE_start
+    
+    print(f"{prefix} OE Differences {OE_dim_diff} \t Total dOE: {np.linalg.norm(OE_dim_diff)}")
+    print(f"{prefix} OE Non-Dim Differences {OE_diff} \t Total dOE: {np.linalg.norm(OE_diff)}")
+
+
 def check_for_intersection(sol, obj_file):
     mesh = trimesh.load_mesh(obj_file)
     proximity = trimesh.proximity.ProximityQuery(mesh)

@@ -177,6 +177,7 @@ class LPE_Milankovitch():
         
         self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
         self.element_set = 'milankovitch'
+        self.num_elements = 7
 
     def non_dimensionalize_state(self, x0):
         mil_OE_ND = tf.concat([(self.t_star/self.l_star**2)*x0[:,0:3], x0[:,3:7]], axis=1)
@@ -357,7 +358,8 @@ class LPE_Traditional():
         self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
         self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
         self.element_set = 'traditional'
-    
+        self.num_elements = 6
+
     def non_dimensionalize_state(self, x0):
         a = tf.reshape(1.0/self.l_star*x0[:,0],(-1,1))
         trad_OE_ND = tf.concat([a, x0[:,1:]], axis=1)
