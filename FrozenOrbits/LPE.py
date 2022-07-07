@@ -503,3 +503,97 @@ class LPE_Traditional():
 
         dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)
         return dOE_dt_dx
+
+
+class LPE_Cartesian():
+    "LPE with cartesian coordinates, but normalized by length, time, and mass"
+    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+        self.model = model
+        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name='mu')
+        self.l_star = tf.constant(l_star, dtype=tf.float64, name='ref_length')
+        self.m_star = tf.constant(m_star, dtype=tf.float64, name='ref_mass')
+        self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
+        self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
+        self.element_set = 'traditional'
+        self.num_elements = 6
+
+    def non_dimensionalize_state(self, x0):
+        x_ND = tf.reshape(1.0/self.l_star*x0[:,0:3],(-1,3))
+        v_ND = tf.reshape(self.t_star/self.l_star*x0[:,3:6],(-1,3))
+        cart_ND = tf.concat([x_ND, v_ND], axis=1)
+        return cart_ND
+
+    def dimensionalize_state(self, x0):
+        x = tf.reshape(self.l_star*x0[:,0:3],(-1,3))
+        v = tf.reshape(self.l_star/self.t_star*x0[:,3:6],(-1,3))
+        cart = tf.concat([x, v], axis=1)
+        return cart
+
+    def non_dimensionalize_time(self, T):
+        T_ND = T / self.t_star
+        return T_ND
+
+    def dimensionalize_time(self, T_ND):
+        T = T_ND * self.t_star
+        return T
+
+    def dOE_dt(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_results = self.dOE_cart_dt(OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()[0]
+
+    def dOE_dt_dx(self,OE): 
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name='orbit_elements')
+        dOE_dt_dx_results = self.dOE_cart_dt_dx(OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()[0]
+
+
+    def generate_potential(self,x):
+        """
+        Very silly function, but it's the only way to compile dOE_dt_dx as a tf.function().
+        In short, tf.function is unable to accept the model as an argument without constant retracing
+        according to: https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        return self.model.generate_potential_tf(x)
+
+    
+
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
+                                  tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_cart_dt(self, OE, mu): 
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(OE) 
+            trad_OE_dim = self.dimensionalize_state(OE)
+            r_tilde = trad_OE_dim[:,0:3]
+            u_0 = -self.mu_tilde/tf.linalg.norm(r_tilde, keepdims=True)
+            u_pred_tilde = u_0 - self.generate_potential(r_tilde) # THIS MUST BE NEGATED
+            u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
+        a_tilde = -tape.gradient(u_pred, OE)
+        v_tilde = trad_OE_dim[:,3:6]
+        dOE_dt = tf.reshape(tf.concat([v_tilde[:,0], v_tilde[:,1], v_tilde[:,2], a_tilde[:,0], a_tilde[:,1], a_tilde[:,2]],axis=0),(-1, 6))
+
+        return dOE_dt
+    
+    @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64),tf.TensorSpec(shape=(), dtype=tf.float64)])
+    def dOE_cart_dt_dx(self, OE, mu): 
+        """For some reason, cannot use self.dOE_trad_dt() within this function, but instead the whole 
+        contents must be copied instead."""
+        print("Retracing")
+        with tf.GradientTape(persistent=True) as tape:
+            tape.watch(OE)
+            with tf.GradientTape(persistent=True) as tape_dt:
+                tape_dt.watch(OE) 
+                trad_OE_dim = self.dimensionalize_state(OE)
+                r_tilde = trad_OE_dim[:,0:3]
+                u_0 = -self.mu_tilde/tf.linalg.norm(r_tilde, keepdims=True)
+                u_pred_tilde = u_0 - self.generate_potential(r_tilde) # THIS MUST BE NEGATED
+                u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
+            a_tilde = -tape_dt.gradient(u_pred, OE)
+            v_tilde = trad_OE_dim[:,3:6]
+            dOE_dt = tf.reshape(tf.concat([v_tilde[:,0], v_tilde[:,1], v_tilde[:,2], a_tilde[:,0], a_tilde[:,1], a_tilde[:,2]],axis=0),(-1, 6))
+
+        dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)
+        return dOE_dt_dx

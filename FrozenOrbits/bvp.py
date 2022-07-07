@@ -383,7 +383,7 @@ def constraint_instantaneous_jac_scalar(V_0, lpe, x_0,
 ## Solver Interface Classes ##
 ##############################
 
-class InstantaenousSolver(ABC):
+class InstantaneousSolver(ABC):
     def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
         self.lpe = lpe
         self.element_set = lpe.element_set
@@ -471,7 +471,7 @@ class ShootingSolver(ABC):
         result = self.solve_subroutine(X_0, V_0, V_solution_bounds)
         return self.prepare_outputs(X_0, T, result)
 
-class InstantaneousLsSolver(InstantaenousSolver):
+class InstantaneousLsSolver(InstantaneousSolver):
     def __init__(self, *args):
         super().__init__(*args)
         pass
@@ -498,7 +498,7 @@ class InstantaneousLsSolver(InstantaenousSolver):
                                     )
         return result
 
-class InstantaneousRootSolver(InstantaenousSolver):
+class InstantaneousRootSolver(InstantaneousSolver):
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -524,7 +524,7 @@ class InstantaneousRootSolver(InstantaenousSolver):
                             )
         return result
 
-class InstantaneousMinimizeSolver(InstantaenousSolver):
+class InstantaneousMinimizeSolver(InstantaneousSolver):
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -551,7 +551,7 @@ class InstantaneousMinimizeSolver(InstantaenousSolver):
                             )
         return result
 
-class InstantaneousBasinHoppingSolver(InstantaenousSolver):
+class InstantaneousBasinHoppingSolver(InstantaneousSolver):
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -590,7 +590,7 @@ class ShootingLsSolver(ShootingSolver):
                                         self.constraint_angle_wrap_mask),
                                     bounds=V_solution_bounds,
                                     verbose=2,
-                                    xtol=1
+                                    # xtol=1
                                     # xtol=None,
                                     # ftol=None,
                                     # method='dogbox'
@@ -637,3 +637,73 @@ class ShootingMinimizeSolver(ShootingSolver):
                             )
         return result
     
+
+
+#######################
+## Cartesian Solvers ##
+#######################
+
+
+class CartesianShootingLsSolver(ShootingSolver):
+    def __init__(self, *args):
+        super().__init__(*args)    
+
+    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+        self.lpe = lpe
+        self.element_set = lpe.element_set
+
+        if decision_variable_mask is None:
+            decision_variable_mask = [True]*(lpe.num_elements+1) # N + 1
+        self.decision_variable_mask = decision_variable_mask
+        if constraint_variable_mask is None:
+            constraint_variable_mask = [True]*(lpe.num_elements+1) # N + 1
+        self.constraint_variable_mask = constraint_variable_mask
+        if constraint_angle_wrap_mask is None:
+            constraint_angle_wrap_mask = [True]*(lpe.num_elements+1) # N + 1
+        self.constraint_angle_wrap_mask = constraint_angle_wrap_mask
+
+        pass
+    
+    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
+        OE_0, T = non_dimensionalize(OE_0_dim, T_dim, self.lpe)
+        X_0 = np.hstack((OE_0.reshape((-1)), T)) # Decision variables that can be updated
+        V_0 = X_0[self.decision_variable_mask]
+        V_solution_bounds = np.array(solution_bounds)[:,self.decision_variable_mask]
+
+        return X_0, V_0, V_solution_bounds, T
+    
+    def prepare_outputs(self, X_0, T, result):
+        print_result_info(result)
+
+        OE_f = update_state(X_0, result.x, self.decision_variable_mask) #remove time
+        T_f = OE_f[0,-1]# The non-dim time
+        OE_f = np.array([OE_f[0,:-1]]) # the non-dim OE
+
+        # The OE set is actually cartesian state (henceforth referred to as X)
+        X_0_sol, T_sol = dimensionalize(OE_f, T_f, self.lpe)
+        OE_0_sol = cart2oe_tf(X_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
+
+        return OE_0_sol, X_0_sol, T_sol, result
+
+    def solve(self, OE_0_dim, T_dim, solution_bounds):
+        X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
+        result = self.solve_subroutine(X_0, V_0, V_solution_bounds)
+        return self.prepare_outputs(X_0, T, result)
+
+    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
+        result = least_squares(constraint_shooting, V_0, jac=constraint_shooting_jac, 
+                                    args=(
+                                        self.lpe, 
+                                        X_0,
+                                        self.decision_variable_mask,
+                                        self.constraint_variable_mask,
+                                        self.constraint_angle_wrap_mask),
+                                    bounds=V_solution_bounds,
+                                    verbose=2,
+                                    # xtol=1
+                                    # xtol=None,
+                                    # ftol=None,
+                                    # method='dogbox'
+                                    )
+        return result
+
