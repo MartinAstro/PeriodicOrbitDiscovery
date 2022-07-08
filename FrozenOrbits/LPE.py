@@ -569,10 +569,10 @@ class LPE_Cartesian():
             trad_OE_dim = self.dimensionalize_state(OE)
             r_tilde = trad_OE_dim[:,0:3]
             u_0 = -self.mu_tilde/tf.linalg.norm(r_tilde, keepdims=True)
-            u_pred_tilde = u_0 - self.generate_potential(r_tilde) # THIS MUST BE NEGATED
+            u_pred_tilde = u_0 + self.generate_potential(r_tilde) # THIS MUST BE NEGATED
             u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
         a_tilde = -tape.gradient(u_pred, OE)
-        v_tilde = trad_OE_dim[:,3:6]
+        v_tilde = OE[:,3:6]
         dOE_dt = tf.reshape(tf.concat([v_tilde[:,0], v_tilde[:,1], v_tilde[:,2], a_tilde[:,0], a_tilde[:,1], a_tilde[:,2]],axis=0),(-1, 6))
 
         return dOE_dt
@@ -589,10 +589,10 @@ class LPE_Cartesian():
                 trad_OE_dim = self.dimensionalize_state(OE)
                 r_tilde = trad_OE_dim[:,0:3]
                 u_0 = -self.mu_tilde/tf.linalg.norm(r_tilde, keepdims=True)
-                u_pred_tilde = u_0 - self.generate_potential(r_tilde) # THIS MUST BE NEGATED
+                u_pred_tilde = u_0 + self.generate_potential(r_tilde) # THIS MUST BE NEGATED
                 u_pred = (self.t_star/self.l_star)**2*self.m_star*u_pred_tilde
             a_tilde = -tape_dt.gradient(u_pred, OE)
-            v_tilde = trad_OE_dim[:,3:6]
+            v_tilde = OE[:,3:6]
             dOE_dt = tf.reshape(tf.concat([v_tilde[:,0], v_tilde[:,1], v_tilde[:,2], a_tilde[:,0], a_tilde[:,1], a_tilde[:,2]],axis=0),(-1, 6))
 
         dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)

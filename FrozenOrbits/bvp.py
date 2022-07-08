@@ -642,12 +642,7 @@ class ShootingMinimizeSolver(ShootingSolver):
 #######################
 ## Cartesian Solvers ##
 #######################
-
-
-class CartesianShootingLsSolver(ShootingSolver):
-    def __init__(self, *args):
-        super().__init__(*args)    
-
+class CartesianShootingSolver(ABC):
     def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
         self.lpe = lpe
         self.element_set = lpe.element_set
@@ -682,6 +677,7 @@ class CartesianShootingLsSolver(ShootingSolver):
         # The OE set is actually cartesian state (henceforth referred to as X)
         X_0_sol, T_sol = dimensionalize(OE_f, T_f, self.lpe)
         OE_0_sol = cart2oe_tf(X_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
+        X_0_sol = X_0_sol[0]
 
         return OE_0_sol, X_0_sol, T_sol, result
 
@@ -689,7 +685,12 @@ class CartesianShootingLsSolver(ShootingSolver):
         X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
         result = self.solve_subroutine(X_0, V_0, V_solution_bounds)
         return self.prepare_outputs(X_0, T, result)
+    
+    @abstractmethod
+    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
+        pass
 
+class CartesianShootingLsSolver(CartesianShootingSolver):
     def solve_subroutine(self, X_0, V_0, V_solution_bounds):
         result = least_squares(constraint_shooting, V_0, jac=constraint_shooting_jac, 
                                     args=(
@@ -705,5 +706,19 @@ class CartesianShootingLsSolver(ShootingSolver):
                                     # ftol=None,
                                     # method='dogbox'
                                     )
+        return result
+
+class CartesianShootingRootSolver(CartesianShootingSolver):
+    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
+        result = root(constraint_shooting, V_0, jac=constraint_shooting_jac, 
+                            args=(
+                                self.lpe, 
+                                X_0,
+                                self.decision_variable_mask,
+                                self.constraint_variable_mask,
+                                self.constraint_angle_wrap_mask),
+                                # tol=1E-20
+                            # bounds=V_bounds_tuple,
+                            )
         return result
 
