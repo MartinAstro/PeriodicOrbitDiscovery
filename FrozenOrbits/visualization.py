@@ -240,5 +240,5 @@ def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     x_i, y_i, z_i = X[0,0:3]
-    op.plot3d(X[:,0:3].T, obj_file=obj_file, new_fig=False, traj_cm=plt.cm.PiYG) 
+    op.plot3d(X[:,0:3].T, obj_file=obj_file, new_fig=False, traj_cm=plt.cm.winter) 
     plt.gca().scatter(x_i, y_i, z_i, s=3, c='r')
