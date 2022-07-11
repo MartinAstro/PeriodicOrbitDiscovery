@@ -254,7 +254,8 @@ def _compute_h(I, i, Omega):
     h = tf.map_fn(fn=lambda OE_subset: _compute_h_cond(OE_subset), elems=OE_subset)
     return h
 
-def oe2equinoctial_tf(OE):
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
+def oe2equinoctial_tf(OE, mu):
     """Convert traditional elements to equinoctial elements
 
     Args:
@@ -263,7 +264,12 @@ def oe2equinoctial_tf(OE):
     Returns:
         equi_OE (tf.Tensor or np.array): [N x 6] (p, f, g, L, h, k)
     """
-    a, e, i, omega, Omega, M = tf.transpose(OE[:,0:6])
+    a = OE[:,0]
+    e = OE[:,1]
+    i = OE[:,2]
+    omega = OE[:,3]
+    Omega = OE[:,4]
+    M = OE[:,5]
 
     # prograde i in [0, 90]
     # retrograde i in [90, 180]
@@ -282,7 +288,8 @@ def oe2equinoctial_tf(OE):
     equi_OE = tf.stack([p, f, g, L, h, k], 1)
     return equi_OE
 
-def equinoctial2oe_tf(equi_OE):
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
+def equinoctial2oe_tf(equi_OE, mu):
     """Convert equinoctial elements to traditional elements
 
     Args:
@@ -290,8 +297,13 @@ def equinoctial2oe_tf(equi_OE):
 
     Returns:
         trad_OE: [N x 6] (a, e, i, omega, Omega, M)
-    """
-    p, f, g, L, h, k = tf.transpose(equi_OE[:,0:6])
+"""
+    p = equi_OE[:,0]
+    f = equi_OE[:,1]
+    g = equi_OE[:,2]
+    L = equi_OE[:,3]
+    h = equi_OE[:,4]
+    k = equi_OE[:,5] 
     pi = tf.constant(np.pi, dtype=f.dtype)
 
     e = tf.sqrt(tf.square(f) + tf.square(g))
@@ -315,6 +327,7 @@ def equinoctial2oe_tf(equi_OE):
     trad_OE = tf.stack([a, e, i, omega, Omega, M], 1)
     return trad_OE
 
+@tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
 def cart2equinoctial_tf(X,mu):
     trad = cart2trad_tf(X, mu)
     equi = oe2equinoctial_tf(trad)
@@ -428,6 +441,10 @@ def cart2milankovitch_tf(X, mu):
     f = tf.atan2(tf_dot(tf.linalg.cross(e_hat, r_hat), h_hat), tf_dot(e_hat, r_hat))
     M_val = computeMeanAnomaly(f, e_mag)
     M = tf.reshape(M_val, (-1, 1))
+
+    # omega = convert_angle(omega)
+    # Omega = convert_angle(Omega)
+    # M = convert_angle(M)
 
     L_val = Omega + omega + M
     L = tf.reshape(L_val, (-1,1))
