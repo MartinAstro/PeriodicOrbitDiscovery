@@ -231,7 +231,7 @@ def constraint_shooting(V_0, lpe, x_0,
     # Wrap angles depending on the element set
     for i in range(len(x_f)):
         if constraint_angle_wrap_mask[i]:
-            C[i] = calc_angle_diff(x_0[i], x_f[i])
+            C[i] = calc_angle_diff(x_i[i], x_f[i])
 
     C = C[constraint_variable_mask] # remove masked variables
     return C
@@ -263,7 +263,7 @@ def constraint_shooting_jac(V_0, lpe, x_0,
                     [0, T],
                     z_i.reshape((-1,)),
                     args=(lpe,pbar),
-                    atol=1E-7, rtol=1E-7)
+                    atol=1E-5, rtol=1E-5)
     pbar.close()
     z_f = sol.y[:,-1]
     x_f = z_f[:N]
@@ -590,9 +590,12 @@ class ShootingLsSolver(ShootingSolver):
                                         self.constraint_angle_wrap_mask),
                                     bounds=V_solution_bounds,
                                     verbose=2,
+                                    # x_scale=[1.0, 1.0 ,np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 1.0]
+                                    # x_scale=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2*np.pi, 1.0]
                                     # xtol=1
                                     # xtol=None,
-                                    # ftol=None,
+                                    # ftol=1E-4,
+                                    # loss='soft_l1'
                                     # method='dogbox'
                                     )
         return result
@@ -626,7 +629,7 @@ class ShootingMinimizeSolver(ShootingSolver):
         for i in range(len(V_solution_bounds[0])):
             V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
 
-        result = minimize(constraint_shooting_scalar, V_0, jac=constraint_shooting_jac_scalar,
+        result = minimize(constraint_shooting_scalar, V_0,# jac=constraint_shooting_jac_scalar,
                             args=(
                                 self.lpe, 
                                 X_0,
