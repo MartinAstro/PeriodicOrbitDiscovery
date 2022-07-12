@@ -205,7 +205,9 @@ def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model, element_set, decis
 def constraint_shooting(V_0, lpe, x_0, 
     decision_variable_mask, 
     constraint_variable_mask, 
-    constraint_angle_wrap_mask):
+    constraint_angle_wrap_mask, 
+    rtol, 
+    atol):
     
     x_i = update_state(x_0[:-1], V_0, decision_variable_mask).reshape((-1,))
     x_i = x_i.reshape((-1,))
@@ -220,7 +222,8 @@ def constraint_shooting(V_0, lpe, x_0,
             [0, T],
             x_i.reshape((-1,)), 
             args=(lpe, pbar),
-            atol=1E-7, rtol=1E-7)
+            atol=atol, rtol=rtol
+            )
     pbar.close()
     x_f = sol.y[:,-1]
 
@@ -239,7 +242,9 @@ def constraint_shooting(V_0, lpe, x_0,
 def constraint_shooting_jac(V_0, lpe, x_0, 
     decision_variable_mask, 
     constraint_variable_mask,
-    constraint_angle_wrap_mask):
+    constraint_angle_wrap_mask,
+    rtol, 
+    atol):
     N = len(x_0) - 1 # Remove from the state
     phi_0 = np.identity(N)
 
@@ -263,7 +268,9 @@ def constraint_shooting_jac(V_0, lpe, x_0,
                     [0, T],
                     z_i.reshape((-1,)),
                     args=(lpe,pbar),
-                    atol=1E-5, rtol=1E-5)
+                    atol=atol, rtol=rtol,
+                    #method='LSODA'
+                    )
     pbar.close()
     z_f = sol.y[:,-1]
     x_f = z_f[:N]
@@ -427,7 +434,7 @@ class InstantaneousSolver(ABC):
         return self.prepare_outputs(X_0, T, result)
 
 class ShootingSolver(ABC):
-    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None, rtol=1E-3, atol=1E-6, max_nfev=None):
         self.lpe = lpe
         self.element_set = lpe.element_set
 
@@ -440,7 +447,9 @@ class ShootingSolver(ABC):
         if constraint_angle_wrap_mask is None:
             constraint_angle_wrap_mask = [True]*(lpe.num_elements+1) # N + 1
         self.constraint_angle_wrap_mask = constraint_angle_wrap_mask
-
+        self.rtol = rtol
+        self.atol = atol
+        self.max_nfev = max_nfev
         pass
     
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
@@ -472,8 +481,8 @@ class ShootingSolver(ABC):
         return self.prepare_outputs(X_0, T, result)
 
 class InstantaneousLsSolver(InstantaneousSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
         pass
 
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
@@ -499,8 +508,8 @@ class InstantaneousLsSolver(InstantaneousSolver):
         return result
 
 class InstantaneousRootSolver(InstantaneousSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
 
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
         return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
@@ -525,8 +534,8 @@ class InstantaneousRootSolver(InstantaneousSolver):
         return result
 
 class InstantaneousMinimizeSolver(InstantaneousSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
 
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
         return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
@@ -552,8 +561,8 @@ class InstantaneousMinimizeSolver(InstantaneousSolver):
         return result
 
 class InstantaneousBasinHoppingSolver(InstantaneousSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
 
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
         return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
@@ -578,8 +587,8 @@ class InstantaneousBasinHoppingSolver(InstantaneousSolver):
         return result
 
 class ShootingLsSolver(ShootingSolver):
-    def __init__(self, *args):
-        super().__init__(*args)    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
     def solve_subroutine(self, X_0, V_0, V_solution_bounds):
         result = least_squares(constraint_shooting, V_0, jac=constraint_shooting_jac, 
                                     args=(
@@ -587,9 +596,12 @@ class ShootingLsSolver(ShootingSolver):
                                         X_0,
                                         self.decision_variable_mask,
                                         self.constraint_variable_mask,
-                                        self.constraint_angle_wrap_mask),
+                                        self.constraint_angle_wrap_mask,
+                                        self.rtol,
+                                        self.atol),
                                     bounds=V_solution_bounds,
                                     verbose=2,
+                                    max_nfev=self.max_nfev
                                     # x_scale=[1.0, 1.0 ,np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 1.0]
                                     # x_scale=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2*np.pi, 1.0]
                                     # xtol=1
@@ -601,8 +613,8 @@ class ShootingLsSolver(ShootingSolver):
         return result
 
 class ShootingRootSolver(ShootingSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
     
     def solve_subroutine(self, X_0, V_0, V_solution_bounds):
         V_bounds_tuple = []
@@ -621,8 +633,8 @@ class ShootingRootSolver(ShootingSolver):
         return result
 
 class ShootingMinimizeSolver(ShootingSolver):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)    
     
     def solve_subroutine(self, X_0, V_0, V_solution_bounds):
         V_bounds_tuple = []
