@@ -104,8 +104,8 @@ def semilatus_rectum(OE):
     return p
 
 def _conditional_I(i):
-    pi = tf.constant(np.pi, dtype=i.dtype)
-    I = tf.cond(i > pi/2.0, lambda : -1.0, lambda : 1.0)
+    pi = tf.constant(np.pi, dtype=tf.float64)
+    I = tf.cond(i > pi/2.0, lambda : tf.constant(-1.0, dtype=tf.float64), lambda : tf.constant(1.0, dtype=tf.float64))
     return I 
 
 def get_I(i):
@@ -276,16 +276,17 @@ def oe2equinoctial_tf(OE, mu):
     I = get_I(i)
 
     p = semilatus_rectum(OE)
+
     f = e*tf.cos(omega + I*Omega)
     g = e*tf.sin(omega + I*Omega)
-
     v = computeTrueAnomaly(OE)
 
     L = v + I*Omega + omega
     h = _compute_h(I, i, Omega) 
     k = _compute_k(I, i, Omega)
 
-    equi_OE = tf.stack([p, f, g, L, h, k], 1)
+    # equi_OE = tf.reshape(tf.concat([p, f, g, L, h, k], axis=0), (-1,6))
+    equi_OE = tf.stack([p, f, g, L, h, k], axis=1)
     return equi_OE
 
 @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
@@ -304,7 +305,6 @@ def equinoctial2oe_tf(equi_OE, mu):
     L = equi_OE[:,3]
     h = equi_OE[:,4]
     k = equi_OE[:,5] 
-    pi = tf.constant(np.pi, dtype=f.dtype)
 
     e = tf.sqrt(tf.square(f) + tf.square(g))
     a = p/(1.0 - tf.square(e))
@@ -324,7 +324,8 @@ def equinoctial2oe_tf(equi_OE, mu):
 
     M = computeMeanAnomaly(f, e)
 
-    trad_OE = tf.stack([a, e, i, omega, Omega, M], 1)
+    # trad_OE = tf.reshape(tf.concat([a, e, i, omega, Omega, M], axis=0), (-1, 6))
+    trad_OE = tf.stack([a, e, i, omega, Omega, M], axis=1)
     return trad_OE
 
 @tf.function(input_signature=[tf.TensorSpec(shape=(None, 6), dtype=tf.float64), tf.TensorSpec(shape=None, dtype=tf.float64)])
