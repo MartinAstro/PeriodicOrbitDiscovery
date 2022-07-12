@@ -1,0 +1,84 @@
+import os
+import copy
+import time
+import pandas as pd
+from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
+from FrozenOrbits.bvp import *
+
+import GravNN
+import matplotlib.pyplot as plt
+import numpy as np
+import FrozenOrbits
+from FrozenOrbits.boundary_conditions import *
+from FrozenOrbits.gravity_models import (pinnGravityModel,
+                                         polyhedralGravityModel)
+from FrozenOrbits.LPE import *
+from FrozenOrbits.utils import propagate_orbit
+from FrozenOrbits.visualization import *
+from GravNN.CelestialBodies.Asteroids import Eros
+import OrbitalElements.orbitalPlotting as op
+from FrozenOrbits.constraints import *
+from Scripts.BVP.initial_conditions import *
+
+np.random.seed(15)
+
+def sample_initial_conditions():
+    planet = Eros()
+    a = np.random.uniform(3*planet.radius, 7*planet.radius)
+    e = np.random.uniform(0.1, 0.3)
+    i = np.random.uniform(-np.pi, np.pi)
+    omega = np.random.uniform(0.0, 2*np.pi)
+    Omega = np.random.uniform(0.0, 2*np.pi)
+    M = np.random.uniform(0.0, 2*np.pi)
+
+    trad_OE = np.array([[a, e, i, omega, Omega, M]])
+    X = trad2cart_tf(trad_OE,planet.mu).numpy()[0]
+    T = 2*np.pi*np.sqrt(trad_OE[0,0]**3/planet.mu) 
+    return trad_OE, X, T, planet
+
+def main():
+    """Solve a BVP problem using the dynamics of the cartesian state vector"""
+
+    model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
+        "/../Data/Dataframes/eros_BVP_PINN_III.data")  
+    
+    planet = model.config['planet'][0]
+    poly_model = polyhedralGravityModel(planet, planet.obj_8k)
+
+    df = pd.DataFrame({
+            "dt_pinn" : [], 
+            "dt_poly" : [], 
+            "Xf_pinn" : [],  
+            "Xf_poly" : [],  
+            })
+
+    for k in range(10):
+        print(f"Iteration {k}")
+        OE_0, X_0, T_0, planet = sample_initial_conditions()
+
+        # propagate the initial and solution orbits
+        pinn_start_time = time.time()
+        pinn_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
+        dt_pinn = time.time() - pinn_start_time
+
+        poly_start_time = time.time()
+        poly_sol = propagate_orbit(T_0, X_0, poly_model, tol=1E-7) 
+        dt_poly = time.time() - poly_start_time
+
+        df_k = pd.DataFrame().from_dict({ 
+            "index" : [k],
+            "dt_pinn" : [dt_pinn], 
+            "dt_poly" : [dt_poly], 
+            "Xf_pinn" : [pinn_sol.y[:,-1]],  
+            "Xf_poly" : [poly_sol.y[:,-1]],  
+            }).set_index("index")
+
+        df = pd.concat([df, df_k], axis=0)
+
+    directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
+    os.makedirs(directory, exist_ok=True)
+    pd.to_pickle(df, directory + "propagation_time_error.data")
+
+
+if __name__ == "__main__":
+    main()
