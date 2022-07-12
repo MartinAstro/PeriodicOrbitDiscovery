@@ -4,12 +4,15 @@ import trimesh
 from FrozenOrbits.utils import calc_angle_diff
 
 def print_state_differences(sol):
-    pos_diff = np.linalg.norm(sol.y[0:3, -1] - sol.y[0:3, 0])
-    vel_diff = np.linalg.norm(sol.y[3:6, -1] - sol.y[3:6, 0])
+    dX = sol.y[:, -1] - sol.y[:, 0]
+
+    pos_diff = np.linalg.norm(dX[0:3])
+    vel_diff = np.linalg.norm(dX[3:6])
 
     print(f"Integrated Position Difference {pos_diff} [m]")
     print(f"Integrated Velocity Difference {vel_diff} [m/s]")
 
+    return dX
 
 def print_OE_differences(OE_sol, lpe, prefix, constraint_angle_wrap):
 
@@ -33,6 +36,7 @@ def print_OE_differences(OE_sol, lpe, prefix, constraint_angle_wrap):
 
 
 def check_for_intersection(sol, obj_file):
+    valid = True
     mesh = trimesh.load_mesh(obj_file)
     proximity = trimesh.proximity.ProximityQuery(mesh)
     traj = sol.y[0:3, :]
@@ -41,4 +45,4 @@ def check_for_intersection(sol, obj_file):
     if np.any(distance > 0):
         print(" Solution Intersected Body!")
         valid = False
-    
+    return valid

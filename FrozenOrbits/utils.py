@@ -226,3 +226,12 @@ def calc_angle_diff(theta_0, theta_f):
     #https://stackoverflow.com/questions/1878907/how-can-i-find-the-difference-between-two-angles -- not the top answer
     d_theta = np.arctan2(np.sin(theta_f-theta_0), np.cos(theta_f-theta_0))
     return d_theta
+
+
+if __name__ == "__main__":
+    eps = 1E-6
+    print(calc_angle_diff(0.0, 2*np.pi - eps))
+    print(calc_angle_diff(0.0, 2*np.pi + eps))
+    
+    print(calc_angle_diff(np.pi, 2*np.pi - eps))
+    print(calc_angle_diff(np.pi, 2*np.pi + eps))
