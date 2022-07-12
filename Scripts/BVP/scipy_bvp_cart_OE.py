@@ -72,8 +72,8 @@ def main():
     OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
     OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
 
-    print_OE_differences(OE_trad_init, lpe, "IVP")
-    print_OE_differences(OE_trad_bvp, lpe, "BVP")
+    print_OE_differences(OE_trad_init, lpe, "IVP", constraint_variable_mask)
+    print_OE_differences(OE_trad_bvp, lpe, "BVP", constraint_variable_mask)
 
     plot_OE_1d(init_sol.t, OE_trad_init, 'traditional', y0_hline=True)
     plot_OE_1d(bvp_sol.t, OE_trad_bvp, 'traditional', y0_hline=True)

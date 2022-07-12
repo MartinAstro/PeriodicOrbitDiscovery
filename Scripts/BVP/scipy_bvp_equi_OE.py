@@ -20,10 +20,11 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     planet = Eros()
     np.random.seed(15)
-    # tf.config.run_functions_eagerly(True)
+    tf.config.run_functions_eagerly(True)
 
     OE_0, X_0, T, planet = near_periodic_IC()
     OE_0 = oe2equinoctial_tf(OE_0, planet.mu).numpy()
+    # OE_0 = oe2milankovitch_tf(OE_0, planet.mu).numpy()
 
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
