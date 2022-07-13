@@ -48,7 +48,8 @@ def main():
             "OE_0" : [],  "OE_0_sol" : [],
             "X_0" : [], "X_0_sol" : [],
             "dOE_0" : [], "dOE_sol" : [],
-            "dX_0" : [], "dX_sol" : [],       
+            "dX_0" : [], "dX_sol" : [],     
+            "result" : []  
         })
 
     # lpe = LPE_Traditional(model.gravity_model, planet.mu, 
@@ -77,7 +78,7 @@ def main():
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=2) 
+                                max_nfev=10) 
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
         
@@ -108,7 +109,8 @@ def main():
             "X_0" : [X_0], "X_0_sol" : [X_0_sol],
             "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
             "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
-            "elapsed_time" : [elapsed_time]
+            "elapsed_time" : [elapsed_time],
+            "result" : [results]
         }
         df_k = pd.DataFrame().from_dict(data).set_index('index')
         df = pd.concat([df, df_k], axis=0)

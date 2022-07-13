@@ -43,7 +43,8 @@ def main():
             "OE_0" : [],  "OE_0_sol" : [],
             "X_0" : [], "X_0_sol" : [],
             "dOE_0" : [], "dOE_sol" : [],
-            "dX_0" : [], "dX_sol" : [],       
+            "dX_0" : [], "dX_sol" : [],   
+            "result" : []    
         })
 
     for k in range(10):
@@ -94,12 +95,14 @@ def main():
         dOE_sol, dOE_sol_dimless = print_OE_differences(OE_trad_bvp, lpe, "BVP", constraint_angle_wrap)
 
         data = {
-            "T_0" : T_0, "T_0_sol" : T_0_sol,
-            "OE_0" : OE_0[0], "OE_0_sol" : OE_0_sol[0],
-            "X_0" : X_0, "X_0_sol" : X_0_sol,
-            "dOE_0" : dOE_0, "dOE_sol" : dOE_sol,
-            "dX_0" : dX_0, "dX_sol" : dX_sol,       
-            "elapsed_time" : elapsed_time
+            "index" : k,
+            "T_0" : [T_0], "T_0_sol" : [T_0_sol],
+            "OE_0" : [OE_0[0]], "OE_0_sol" : [OE_0_sol[0]],
+            "X_0" : [X_0], "X_0_sol" : [X_0_sol],
+            "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
+            "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
+            "elapsed_time" : [elapsed_time],
+            "result" : [results]
         }
         df_k = pd.DataFrame().from_dict(data)
         df = pd.concat([df, df_k], axis=0)
