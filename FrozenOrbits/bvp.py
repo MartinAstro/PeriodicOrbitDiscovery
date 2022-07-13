@@ -658,7 +658,7 @@ class ShootingMinimizeSolver(ShootingSolver):
 ## Cartesian Solvers ##
 #######################
 class CartesianShootingSolver(ABC):
-    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
+    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None, rtol=1E-3, atol=1E-6, max_nfev=None):
         self.lpe = lpe
         self.element_set = lpe.element_set
 
@@ -671,7 +671,9 @@ class CartesianShootingSolver(ABC):
         if constraint_angle_wrap_mask is None:
             constraint_angle_wrap_mask = [True]*(lpe.num_elements+1) # N + 1
         self.constraint_angle_wrap_mask = constraint_angle_wrap_mask
-
+        self.rtol = rtol
+        self.atol = atol
+        self.max_nfev = max_nfev
         pass
     
     def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
@@ -694,7 +696,7 @@ class CartesianShootingSolver(ABC):
         OE_0_sol = cart2oe_tf(X_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
         X_0_sol = X_0_sol[0]
 
-        return OE_0_sol, X_0_sol, T_sol, result
+        return OE_0_sol.reshape((-1,6)), X_0_sol, T_sol, result
 
     def solve(self, OE_0_dim, T_dim, solution_bounds):
         X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
@@ -713,9 +715,12 @@ class CartesianShootingLsSolver(CartesianShootingSolver):
                                         X_0,
                                         self.decision_variable_mask,
                                         self.constraint_variable_mask,
-                                        self.constraint_angle_wrap_mask),
+                                        self.constraint_angle_wrap_mask,
+                                        self.rtol,
+                                        self.atol),
                                     bounds=V_solution_bounds,
                                     verbose=2,
+                                    max_nfev=self.max_nfev
                                     # xtol=1
                                     # xtol=None,
                                     # ftol=None,
