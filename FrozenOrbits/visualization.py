@@ -238,8 +238,7 @@ def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
         X (np.array): state vector [N x 6]
     """
     new_fig = kwargs.get("new_fig", False)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    cmap = kwargs.get("cmap", plt.cm.winter)
     x_i, y_i, z_i = X[0,0:3]
-    op.plot3d(X[:,0:3].T, obj_file=obj_file, new_fig=new_fig, traj_cm=plt.cm.winter) 
+    op.plot3d(X[:,0:3].T, obj_file=obj_file, new_fig=new_fig, traj_cm=cmap) 
     plt.gca().scatter(x_i, y_i, z_i, s=3, c='r')

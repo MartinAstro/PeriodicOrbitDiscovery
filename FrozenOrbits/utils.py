@@ -211,14 +211,16 @@ def get_solution_metrics(results, sol):
 
     return bc_pos_diff, pos_diff, vel_diff
 
-def propagate_orbit(T, x_0, model, tol=1E-12):
+def propagate_orbit(T, x_0, model, tol=1E-12, t_eval=None):
+    if t_eval is None:
+        t_eval = np.linspace(0, T, 100)
     pbar = ProgressBar(T, enable=True)
     sol = solve_ivp(dynamics_cart, 
                     [0, T], 
                     x_0, 
                     args=(model, pbar),
                     atol=tol, rtol=tol, 
-                    t_eval=np.linspace(0, T, 100))
+                    t_eval=t_eval)
     pbar.close()
     return sol
 
