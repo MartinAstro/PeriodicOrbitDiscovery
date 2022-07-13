@@ -25,6 +25,14 @@ def sample_initial_conditions(df, k):
     OE_0 = np.array([df["OE_0_sol"][k]])
     T_0 = df["T_0_sol"][k]
     X_0 = np.array(df["X_0_sol"][k])
+
+    # Don't include the bounded OE scenario
+    # replace with the initial conditions instead
+    if df.index[k] == "OE_Bounded":
+        OE_0 = np.array([df["OE_0"][k]])
+        T_0 = df["T_0"][k]
+        X_0 = np.array(df["X_0"][k])
+
     return OE_0, X_0, T_0, planet
 
 
@@ -33,17 +41,18 @@ def main():
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
 
     directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
-    coarse_df = pd.read_pickle(directory + "coarse_orbit_solutions.data")
-    # coarse_df = pd.read_pickle(directory + "fine_orbit_solutions.data")
-
-    period_multiplier = 10
-    for k in range(len(coarse_df)):
+    df = pd.read_pickle(directory + "constrained_orbit_solutions.data")
+    vis = VisualizationBase()
+    period_multiplier = 1
+    for k in range(len(df)):
         new_fig = True if k == 0 else False
-        OE_0, X_0, T, planet = sample_initial_conditions(coarse_df, k)
+        OE_0, X_0, T, planet = sample_initial_conditions(df, k)           
         init_sol = propagate_orbit(T*period_multiplier, X_0, model, tol=1E-7, t_eval=np.linspace(0, T*period_multiplier, 100*period_multiplier)) 
         plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k, new_fig=new_fig)
         plt.title("Initial Conditions")
 
+
+    vis.save(plt.gcf(), os.path.basename(__file__).split('.py')[0] + '.pdf')
     plt.show()
 
 if __name__ == "__main__":

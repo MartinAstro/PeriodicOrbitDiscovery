@@ -20,18 +20,16 @@ from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
 
-def main():
+def main(df_filename, start_color, end_color):
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
     planet = model.config['planet'][0]
     directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
-    coarse_df = pd.read_pickle(directory + "coarse_orbit_solutions.data")
+    df = pd.read_pickle(directory + df_filename)
 
-    vis = VisualizationBase()
-    vis.newFig()
-    for k in range(len(coarse_df)):
-        dX_0 = np.array(coarse_df["dX_0"][k])
-        dX_0_sol = np.array(coarse_df["dX_sol"][k])
+    for k in range(len(df)):
+        dX_0 = np.array(df["dX_0"].iloc[k])
+        dX_0_sol = np.array(df["dX_sol"].iloc[k])
 
         r_0 = np.linalg.norm(dX_0[0:3])
         v_0 = np.linalg.norm(dX_0[3:6])
@@ -41,14 +39,19 @@ def main():
         dr = r_0_sol - r_0
         dv = v_0_sol - v_0
 
-        plt.scatter(r_0, v_0, c='blue')
-        plt.scatter(r_0_sol, v_0_sol, c='red')
+        plt.scatter(r_0, v_0, c=start_color)
+        plt.scatter(r_0_sol, v_0_sol, c=end_color)
         plt.arrow(r_0, v_0, dr, dv, head_length=np.linalg.norm([dr, dv])/10, length_includes_head=True,color='black')
 
     plt.xlabel("$\delta r$ [m]")
     plt.ylabel("$\delta v$ [m/s]")
-    # plt.xscale('log')
-    plt.show()
 
 if __name__ == "__main__":
-    main()
+
+    vis = VisualizationBase()
+    vis.newFig()
+    main("coarse_orbit_solutions.data", 'red', 'blue')
+    main("fine_orbit_solutions.data", 'blue', 'green')
+    vis.save(plt.gcf(), os.path.basename(__file__).split('.py')[0] + '.pdf')
+    plt.show()
+
