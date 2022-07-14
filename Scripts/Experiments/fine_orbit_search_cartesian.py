@@ -36,7 +36,7 @@ def main():
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
 
     directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
-    coarse_df = pd.read_pickle(directory + "coarse_orbit_solutions.data")
+    coarse_df = pd.read_pickle(directory + "cartesian_coarse_orbit_solutions.data")
 
     df = pd.DataFrame({
             "T_0" : [], "T_0_sol" : [],
@@ -51,21 +51,25 @@ def main():
         print(f"Iteration {k}")
 
         OE_0, X_0, T_0, planet = sample_initial_conditions(coarse_df, k)
-        OE_original = np.array([df.iloc[k]["OE_0"]])
-        scale = 1.0 #/ OE_0[0,0]
-        lpe = LPE_Traditional(model.gravity_model, planet.mu, 
-                                    l_star=OE_original[0,0]/scale, 
-                                    t_star=T_0, 
+        X_0_original = np.array(df.iloc[k]["X_0_sol"])
+
+        scale = 100.0 
+        l_star = np.linalg.norm(X_0_original[0:3])/scale
+        t_star = np.linalg.norm(X_0_original[3:6])*10000/l_star
+        lpe = LPE_Cartesian(model.gravity_model, planet.mu, 
+                                    l_star=l_star, 
+                                    t_star=t_star, 
                                     m_star=1.0)
         start_time = time.time()
 
         # Shooting solvers
-        bounds = ([0.7*scale, 0.1, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
-                [1.1*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
+        bounds = ([-np.inf, -np.inf,-np.inf,-np.inf,-np.inf,-np.inf, 0.9*T_0/t_star],
+              [ np.inf,  np.inf, np.inf, np.inf, np.inf, np.inf, 1.1*T_0/t_star])
         decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False] 
-        constraint_angle_wrap = [False, False, False, True, True, True, False] 
-        solver = ShootingLsSolver(lpe, 
+        constraint_angle_wrap = [False, False, False, False, False, False, False] 
+
+        solver = CartesianShootingLsSolver(lpe, 
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
@@ -73,12 +77,8 @@ def main():
                                 atol=1E-6,
                                 rtol=1E-6) 
 
-        OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
-        
+        OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
         elapsed_time = time.time() - start_time
-        print(f"Time Elapsed: {elapsed_time}")
-        print(f"Initial OE: {OE_0} \t T: {T_0}")
-        print(f"BVP OE: {OE_0_sol} \t T {T_0_sol}")
 
         # propagate the initial and solution orbits
         init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
@@ -105,12 +105,13 @@ def main():
             "elapsed_time" : [elapsed_time],
             "result" : [results]
         }
+
         df_k = pd.DataFrame().from_dict(data)
         df = pd.concat([df, df_k], axis=0)
 
     directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
     os.makedirs(directory, exist_ok=True)
-    pd.to_pickle(df, directory + "fine_orbit_solutions.data")
+    pd.to_pickle(df, directory + "cartesian_fine_orbit_solutions.data")
 
 
 if __name__ == "__main__":
