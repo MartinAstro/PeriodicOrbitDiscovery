@@ -1,37 +1,12 @@
 import numpy as np
 import copy
+import os
 from FrozenOrbits.ivp import *
 from FrozenOrbits.coordinate_transforms import *
 import matplotlib.pyplot as plt
 from GravNN.Visualization.VisualizationBase import VisualizationBase
-import OrbitalElements.orbitalPlotting as op
 import matplotlib.animation as animation
-
-def plot_OE_suite_from_state_sol(sol, planet):
-    t_plot = sol.t
-    y_plot = sol.y # [6, N]
-
-    mil_oe_list = []
-    equi_oe_list = []
-    del_oe_list = []
-    oe_list = []
-    for i in range(len(t_plot, **kwargs)):
-        y = y_plot[:,i].reshape((1,6))
-
-        trad_oe = cart2trad_tf(y, planet.mu)        
-        mil_oe = cart2milankovitch_tf(y, planet.mu)
-        equi_oe = oe2equinoctial_tf(trad_oe)
-        del_oe = oe2delaunay_tf(trad_oe, planet.mu)
-
-        oe_list.append(trad_oe[0,:].numpy())
-        mil_oe_list.append(mil_oe[0,:].numpy())
-        equi_oe_list.append(equi_oe[0,:].numpy())
-        del_oe_list.append(del_oe[0,:].numpy())
-
-    op.plot_OE(t_plot, np.array(mil_oe_list).squeeze().T, OE_set='milankovitch')
-    op.plot_OE(t_plot, np.array(oe_list).squeeze().T, OE_set='traditional')
-    op.plot_OE(t_plot, np.array(equi_oe_list).squeeze().T, OE_set='equinoctial')
-    op.plot_OE(t_plot, np.array(del_oe_list).squeeze().T, OE_set='delaunay')
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def plot_energy(sol, model):
     x = sol.y
@@ -51,7 +26,12 @@ def plot_energy(sol, model):
 #########################
 
 def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
-    plt.plot(x,y)
+    options = {
+        "label" : None,
+        "color" : 'black'
+    }
+    options.update(kwargs)
+    plt.plot(x,y, label=options['label'], color=options['color'])
 
     hlines_local = copy.deepcopy(hlines)
     if y0_hline:
@@ -62,6 +42,47 @@ def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
     for vline in vlines: 
         plt.vlines(vline, np.min(y), np.max(y),linestyle='--')
 
+def plot_3d(rVec, traj_cm=plt.cm.jet, solid_color=None, reverse_cmap=False, **kwargs):
+
+    ax = plt.gca()
+    rx = [rVec[0]]
+    ry = [rVec[1]]
+    rz = [rVec[2]]
+
+    # if there is a cmap specified, break the line into segments
+    # and vary the color to show time evolution
+    if traj_cm is not None and solid_color is None:
+        N = len(rx[0])
+        cVec = np.zeros((N,4))
+        for i in range(N-1):
+            if reverse_cmap:
+                cVec[i] = traj_cm(1 - i/N)
+            else:
+                cVec[i] = traj_cm(i/N)
+            ax.plot(rx[0][i:i+2], ry[0][i:i+2], rz[0][i:i+2], 
+                    color=cVec[i], alpha=kwargs['line_opacity'])
+    else:
+        # Just plot a line, gosh.
+        if solid_color is None:
+            solid_color = 'black'
+        ax.plot(rx[0], ry[0], rz[0], c=solid_color, alpha=kwargs['line_opacity'])
+
+    maxVal = max([max(np.abs(np.concatenate((plt.gca().get_xlim(), rx[0])))), 
+                  max(np.abs(np.concatenate((plt.gca().get_ylim(), ry[0])))), 
+                  max(np.abs(np.concatenate((plt.gca().get_zlim(), rz[0]))))])
+    minVal =  -maxVal
+
+    ax.set_xlim(minVal, maxVal)
+    ax.set_ylim(minVal, maxVal)
+    ax.set_zlim(minVal, maxVal)
+
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+
+    ax.view_init(90, 0)
+    plt.tight_layout()
+
+    return ax
 
 ##########################
 ## High Level Functions ##
@@ -69,84 +90,103 @@ def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
 
 
 def __plot_TraditionalOE(t, OE, **kwargs):    
-    vis = VisualizationBase()
-    vis.newFig()
-    plt.subplot(3,2,1)
+    options = {
+        "horizontal" : False,
+    }
+    options.update(kwargs)
+    if options['horizontal']:
+        grid_rows, grid_columns = 2, 3
+    else:
+        grid_rows, grid_columns = 3, 2
+
+    plt.subplot(grid_rows, grid_columns, 1)
     plot_1d(t, OE[:,0], **kwargs) 
     plt.ylabel("Semi Major Axis")
-    plt.subplot(3,2,2)
+    plt.subplot(grid_rows, grid_columns, 2)
     plot_1d(t, OE[:,1], **kwargs)
     plt.ylabel("Eccentricity")
-    plt.subplot(3,2,3)
+    plt.subplot(grid_rows, grid_columns, 3)
     plot_1d(t, OE[:,2], **kwargs)
     plt.ylabel("Inclination")
 
-    plt.subplot(3,2,4)
+    plt.subplot(grid_rows, grid_columns, 4)
     plot_1d(t, OE[:,3], **kwargs) 
     plt.ylabel("Arg of Periapsis")
-    plt.subplot(3,2,5)
+    plt.subplot(grid_rows, grid_columns, 5)
     plot_1d(t, OE[:,4], **kwargs)
     plt.ylabel("RAAN")
-    plt.subplot(3,2,6)
+    plt.subplot(grid_rows, grid_columns, 6)
     plot_1d(t, OE[:,5], **kwargs)
     plt.ylabel("M")
     plt.suptitle("Traditional Elements")
 
 def __plot_DelaunayOE(t, DelaunayOE, **kwargs):
-    vis = VisualizationBase()
-    vis.newFig()
-    plt.subplot(3,2,1)
+    options = {
+        "horizontal" : False,
+    }
+    options.update(kwargs)
+    if options['horizontal']:
+        grid_rows, grid_columns = 2, 3
+    else:
+        grid_rows, grid_columns = 3, 2
+
+    plt.subplot(grid_rows, grid_columns, 1)
     plot_1d(t, DelaunayOE[:,0], **kwargs) 
     plt.ylabel("l")
-    plt.subplot(3,2,2)
+    plt.subplot(grid_rows, grid_columns, 2)
     plot_1d(t, DelaunayOE[:,1], **kwargs) 
     plt.ylabel("g")
-    plt.subplot(3,2,3)
+    plt.subplot(grid_rows, grid_columns, 3)
     plot_1d(t, DelaunayOE[:,2], **kwargs) 
     plt.ylabel("h")
 
-    plt.subplot(3,2,4)
+    plt.subplot(grid_rows, grid_columns, 4)
     plot_1d(t, DelaunayOE[:,3], **kwargs) 
     plt.ylabel("L")
-    plt.subplot(3,2,5)
+    plt.subplot(grid_rows, grid_columns, 5)
     plot_1d(t, DelaunayOE[:,4], **kwargs) 
     plt.ylabel("G")
-    plt.subplot(3,2,6)
+    plt.subplot(grid_rows, grid_columns, 6)
     plot_1d(t, DelaunayOE[:,5], **kwargs) 
     plt.ylabel("H")
     plt.suptitle("Delaunay Elements")
 
 def __plot_EquinoctialOE(t, EquinoctialOE, **kwargs):   
-    vis = VisualizationBase()
-    vis.newFig()
-    plt.subplot(3,2,1)
+    options = {
+        "horizontal" : False,
+    }
+    options.update(kwargs)
+    if options['horizontal']:
+        grid_rows, grid_columns = 2, 3
+    else:
+        grid_rows, grid_columns = 3, 2
+
+    plt.subplot(grid_rows, grid_columns, 1)
     plot_1d(t, EquinoctialOE[:,0], **kwargs) 
     plt.ylabel("p")
-    plt.subplot(3,2,2)
+    plt.subplot(grid_rows, grid_columns, 2)
     plot_1d(t, EquinoctialOE[:,1], **kwargs) 
     plt.ylabel("f")
-    plt.subplot(3,2,3)
+    plt.subplot(grid_rows, grid_columns, 3)
     plot_1d(t, EquinoctialOE[:,2], **kwargs) 
     plt.ylabel("g")
 
-    plt.subplot(3,2,4)
+    plt.subplot(grid_rows, grid_columns, 4)
     plot_1d(t, EquinoctialOE[:,3], **kwargs) 
     plt.ylabel("L")
-    plt.subplot(3,2,5)
+    plt.subplot(grid_rows, grid_columns, 5)
     plot_1d(t, EquinoctialOE[:,4], **kwargs) 
     plt.ylabel("h")
-    plt.subplot(3,2,6)
+    plt.subplot(grid_rows, grid_columns, 6)
     plot_1d(t, EquinoctialOE[:,5], **kwargs) 
     plt.ylabel("k")
     plt.suptitle("Equinoctial Elements")
 
 def __plot_MilankovitchOE(t, MilankovitchOE, **kwargs):   
-    vis = VisualizationBase()
-    vis.newFig()
     plt.subplot(3,3,1)
     plot_1d(t, MilankovitchOE[:,0], **kwargs) 
     plt.ylabel("H1")
-    plt.subplot(3,3,2)
+    plt.subplot(3,3,2) 
     plot_1d(t, MilankovitchOE[:,1], **kwargs) 
     plt.ylabel("H2")
     plt.subplot(3,3,3)
@@ -185,6 +225,10 @@ def plot_OE_1d(t, OE, element_set, **kwargs):
         y0_hlines (bool) : add an hline at y0
 
     """
+    if kwargs.get('new_fig', True):
+        vis = VisualizationBase()
+        vis.newFig()
+
     if element_set.lower() == "traditional":
         __plot_TraditionalOE(t, OE, **kwargs)
     elif element_set.lower() == "delaunay":
@@ -211,7 +255,7 @@ def plot_cartesian_state_1d(t, X, **kwargs):
     plt.subplot(2,3,1)
     plot_1d(t, X[:,0], **kwargs)
     plt.ylabel("$x$")
-    plt.subplot(2,3,2)
+    plt.subplot(2,grid_rows, grid_columns) 
     plot_1d(t, X[:,1], **kwargs)
     plt.ylabel("$y$")
     plt.subplot(2,3,3)
@@ -237,8 +281,30 @@ def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
         t (np.array): time vector
         X (np.array): state vector [N x 6]
     """
-    new_fig = kwargs.get("new_fig", False)
-    cmap = kwargs.get("cmap", plt.cm.winter)
-    x_i, y_i, z_i = X[0,0:3]
-    op.plot3d(X[:,0:3].T, obj_file=obj_file, new_fig=new_fig, traj_cm=cmap) 
-    plt.gca().scatter(x_i, y_i, z_i, s=3, c='r')
+    options = {
+        "cmap" : plt.cm.winter,
+        "plot_start_point" : True,
+        "new_fig" : False,
+        "line_opacity" : 1.0,
+        }
+    options.update(kwargs)
+
+    if options["new_fig"]:
+        vis = VisualizationBase(formatting_style='AIAA')
+        fig, ax = vis.new3DFig()
+    else:
+        ax = plt.gca()
+
+    plot_3d(X[:,0:3].T, obj_file=obj_file, traj_cm=options['cmap'], **options) 
+
+    # Import the asteroid shape model if appropriate. 
+    if obj_file is not None:
+        import trimesh
+        filename, file_extension = os.path.splitext(obj_file)
+        mesh = trimesh.load_mesh(obj_file, file_type=file_extension[1:])
+        cmap = plt.get_cmap('Greys')
+        tri = Poly3DCollection(mesh.triangles*1000, cmap=cmap, facecolors=cmap(128), alpha=0.5)
+        p = plt.gca().add_collection3d(tri)
+
+    if options['plot_start_point']:
+        plt.gca().scatter(X[0,0], X[0,1], X[0,2], s=3, c='r')
