@@ -693,10 +693,10 @@ class CartesianShootingSolver(ABC):
 
         # The OE set is actually cartesian state (henceforth referred to as X)
         X_0_sol, T_sol = dimensionalize(OE_f, T_f, self.lpe)
-        OE_0_sol = cart2oe_tf(X_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
+        OE_0_sol = cart2oe_tf(X_0_sol, self.lpe.mu_tilde, self.element_set).numpy()
         X_0_sol = X_0_sol[0]
 
-        return OE_0_sol.reshape((-1,6)), X_0_sol, T_sol, result
+        return OE_0_sol, X_0_sol, T_sol, result
 
     def solve(self, OE_0_dim, T_dim, solution_bounds):
         X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
