@@ -38,18 +38,21 @@ def sample_initial_conditions():
 
 def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
         scale = 1.0 
+        scale = 100.0 
+        l_star = np.linalg.norm(X_0[0:3])/scale
+        t_star = np.linalg.norm(X_0[3:6])*10000/l_star
         lpe = LPE_Cartesian(model.gravity_model, planet.mu, 
-                                    l_star=1.0,#np.linalg.norm(OE_0[0,0:3])/scale, 
-                                    t_star=T_0, 
+                                    l_star=l_star, 
+                                    t_star=t_star, 
                                     m_star=1.0)
         start_time = time.time()
 
         # Shooting solvers
-        bounds = ([-np.inf, -np.inf,-np.inf,-np.inf,-np.inf,-np.inf, 0.9],
-              [ np.inf,  np.inf, np.inf, np.inf, np.inf, np.inf, 1.1])
+        bounds = ([-np.inf, -np.inf,-np.inf,-np.inf,-np.inf,-np.inf, 0.9*T_0/t_star],
+              [ np.inf,  np.inf, np.inf, np.inf, np.inf, np.inf, 1.1*T_0/t_star])
         decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False] 
-        constraint_angle_wrap = [False, False, False, True, True, True, False] 
+        constraint_angle_wrap = [False, False, False, False, False, False, False] 
 
         solver = CartesianShootingLsSolver(lpe, 
                                 decision_variable_mask,
