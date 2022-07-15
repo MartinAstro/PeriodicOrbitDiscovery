@@ -27,7 +27,7 @@ def print_OE_differences(OE_sol, lpe, prefix, constraint_angle_wrap):
     for i in range(len(OE_end)):
         if constraint_angle_wrap[i]:
             OE_diff[i] = calc_angle_diff(OE_start[i], OE_end[i])
-            OE_dim_diff[i] = calc_angle_diff(OE_dim_start[i], OE_dim_end[i])
+            OE_dim_diff[i] = calc_angle_diff(OE_dim_start[i], OE_dim_end[i]) / lpe.theta_star
     
     print(f"{prefix} OE Differences {OE_dim_diff} \t Total dOE: {np.linalg.norm(OE_dim_diff)}")
     print(f"{prefix} OE Non-Dim Differences {OE_diff} \t Total dOE: {np.linalg.norm(OE_diff)}")

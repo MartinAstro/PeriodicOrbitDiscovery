@@ -234,8 +234,8 @@ def constraint_shooting(V_0, lpe, x_0,
     # Wrap angles depending on the element set
     for i in range(len(x_f)):
         if constraint_angle_wrap_mask[i]:
-            C[i] = calc_angle_diff(x_i[i], x_f[i])
-
+            C[i] = calc_angle_diff(x_i[i], x_f[i], lpe.theta_star)
+            C[i] = C[i] / lpe.theta_star # scale the angles to be 1 rather than 2*np.pi
     C = C[constraint_variable_mask] # remove masked variables
     return C
 
@@ -285,6 +285,11 @@ def constraint_shooting_jac(V_0, lpe, x_0,
 
     # Remove specified decision variables from jacobian
     D = D[:, decision_variable_mask] # remove columns in D
+
+    # Scale angle constraints by 2*pi
+    for i in range(len(x_f)):
+        if constraint_angle_wrap_mask[i]:
+            D[i] = D[i] / lpe.theta_star # scale the angles to be 1 rather than 2*np.pi 
 
     # # Remove constraint variables
     D = D[constraint_variable_mask, :] # remove rows in D
