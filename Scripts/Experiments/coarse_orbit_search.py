@@ -65,11 +65,12 @@ def main():
         lpe = LPE_Traditional(model.gravity_model, planet.mu, 
                                     l_star=OE_0[0,0]/scale, 
                                     t_star=T_0, 
-                                    m_star=1.0)
+                                    m_star=1.0,
+                                    theta_star=2*np.pi)
         start_time = time.time()
 
         # Shooting solvers
-        bounds = ([0.7*scale, 0.1, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+        bounds = ([0.7*scale, 0.001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
                 [1.1*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
         decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False] 
@@ -78,7 +79,7 @@ def main():
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=10) 
+                                max_nfev=50) 
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
         

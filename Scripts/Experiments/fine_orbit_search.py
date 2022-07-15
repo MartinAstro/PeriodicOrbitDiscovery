@@ -51,16 +51,18 @@ def main():
         print(f"Iteration {k}")
 
         OE_0, X_0, T_0, planet = sample_initial_conditions(coarse_df, k)
-        OE_original = np.array([df.iloc[k]["OE_0"]])
+        OE_original = np.array([coarse_df.iloc[k]["OE_0"]])
+        T_original = np.array([coarse_df.iloc[k]["T_0"]])
         scale = 1.0 #/ OE_0[0,0]
         lpe = LPE_Traditional(model.gravity_model, planet.mu, 
                                     l_star=OE_original[0,0]/scale, 
-                                    t_star=T_0, 
-                                    m_star=1.0)
+                                    t_star=T_original, 
+                                    m_star=1.0
+                                    theta_star=2*np.pi)
         start_time = time.time()
 
         # Shooting solvers
-        bounds = ([0.7*scale, 0.1, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+        bounds = ([0.7*scale, 0.001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
                 [1.1*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
         decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False] 
@@ -69,7 +71,7 @@ def main():
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=10,
+                                max_nfev=50,
                                 atol=1E-6,
                                 rtol=1E-6) 
 

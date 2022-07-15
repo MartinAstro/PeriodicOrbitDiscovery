@@ -33,11 +33,12 @@ def main():
     # T = 69995.82614166693
     # Run the solver
     # scale = 2*np.pi
-    scale = 1.0*OE_0[0,0]
+    scale = 1.0#*OE_0[0,0]
     lpe = LPE_Traditional(model.gravity_model, planet.mu, 
                                 l_star=OE_0[0,0]/scale, 
                                 t_star=T, 
-                                m_star=1.0)#planet.mu/(6.67430*1E-11))
+                                m_star=1.0,
+                                theta_star = 2*np.pi)#planet.mu/(6.67430*1E-11))
 
     start_time = time.time()
 
@@ -55,7 +56,7 @@ def main():
     decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
     constraint_variable_mask = [True, True, True, True, True, True, False] #Don't use period as part of the constraint, just as part of jacobian
     constraint_angle_wrap = [False, False, False, True, True, True, False] #Don't use period as part of the constraint, just as part of jacobian
-    solver = ShootingLsSolver(lpe, decision_variable_mask, constraint_variable_mask,constraint_angle_wrap) # Finds a local optimum, step size gets too small
+    solver = ShootingLsSolver(lpe, decision_variable_mask, constraint_variable_mask,constraint_angle_wrap, rtol=1E-6, atol=1E-6) # Finds a local optimum, step size gets too small
     # solver = ShootingRootSolver(lpe, decision_variable_mask) # Terminates saying not enough progress made
     # solver = ShootingMinimizeSolver(lpe, decision_variable_mask) # Takes too long
 
