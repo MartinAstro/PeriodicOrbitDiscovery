@@ -51,7 +51,7 @@ def main():
         print(f"Iteration {k}")
 
         OE_0, X_0, T_0, planet = sample_initial_conditions(coarse_df, k)
-        X_0_original = np.array(df.iloc[k]["X_0_sol"])
+        X_0_original = np.array(coarse_df.iloc[k]["X_0_sol"])
 
         scale = 100.0 
         l_star = np.linalg.norm(X_0_original[0:3])/scale
@@ -73,7 +73,7 @@ def main():
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=10,
+                                max_nfev=50,
                                 atol=1E-6,
                                 rtol=1E-6) 
 

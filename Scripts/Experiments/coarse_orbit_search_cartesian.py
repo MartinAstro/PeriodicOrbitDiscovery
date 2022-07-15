@@ -76,7 +76,7 @@ def main():
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=10) 
+                                max_nfev=50) 
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
         elapsed_time = time.time() - start_time
