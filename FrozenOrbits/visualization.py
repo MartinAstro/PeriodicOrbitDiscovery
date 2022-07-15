@@ -255,7 +255,7 @@ def plot_cartesian_state_1d(t, X, **kwargs):
     plt.subplot(2,3,1)
     plot_1d(t, X[:,0], **kwargs)
     plt.ylabel("$x$")
-    plt.subplot(2,grid_rows, grid_columns) 
+    plt.subplot(2,3,2) 
     plot_1d(t, X[:,1], **kwargs)
     plt.ylabel("$y$")
     plt.subplot(2,3,3)
@@ -284,7 +284,7 @@ def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
     options = {
         "cmap" : plt.cm.winter,
         "plot_start_point" : True,
-        "new_fig" : False,
+        "new_fig" : True,
         "line_opacity" : 1.0,
         }
     options.update(kwargs)
