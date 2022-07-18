@@ -350,12 +350,13 @@ class LPE_Milankovitch():
 
 class LPE_Traditional():
     "LPE with traditional OE, but normalized by length, time, and mass"
-    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0, theta_star=1.0):
         self.model = model
         self.mu_tilde = tf.constant(mu, dtype=tf.float64, name='mu')
         self.l_star = tf.constant(l_star, dtype=tf.float64, name='ref_length')
         self.m_star = tf.constant(m_star, dtype=tf.float64, name='ref_mass')
         self.t_star = tf.constant(t_star, dtype=tf.float64, name='ref_time')
+        self.theta_star = tf.constant(theta_star, dtype=tf.float64, name='ref_angle')
         self.mu = self.mu_tilde * (self.t_star**2/ self.l_star**3)
         self.element_set = 'traditional'
         self.num_elements = 6

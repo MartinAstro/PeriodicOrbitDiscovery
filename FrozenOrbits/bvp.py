@@ -234,7 +234,7 @@ def constraint_shooting(V_0, lpe, x_0,
     # Wrap angles depending on the element set
     for i in range(len(x_f)):
         if constraint_angle_wrap_mask[i]:
-            C[i] = calc_angle_diff(x_i[i], x_f[i], lpe.theta_star)
+            C[i] = calc_angle_diff(x_i[i], x_f[i])
             C[i] = C[i] / lpe.theta_star # scale the angles to be 1 rather than 2*np.pi
     C = C[constraint_variable_mask] # remove masked variables
     return C
