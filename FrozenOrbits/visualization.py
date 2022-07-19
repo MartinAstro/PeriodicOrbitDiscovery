@@ -28,9 +28,15 @@ def plot_energy(sol, model):
 def plot_1d(x, y, y0_hline=False, hlines=[], vlines=[], **kwargs):
     options = {
         "label" : None,
-        "color" : 'black'
+        "color" : 'black',
+        "new_fig" : False
     }
     options.update(kwargs)
+
+    if options['new_fig']:
+        vis = VisualizationBase()
+        vis.newFig()
+
     plt.plot(x,y, label=options['label'], color=options['color'])
 
     hlines_local = copy.deepcopy(hlines)
@@ -92,6 +98,7 @@ def plot_3d(rVec, traj_cm=plt.cm.jet, solid_color=None, reverse_cmap=False, **kw
 def __plot_TraditionalOE(t, OE, **kwargs):    
     options = {
         "horizontal" : False,
+        "individual_figures" : False
     }
     options.update(kwargs)
     if options['horizontal']:
@@ -99,30 +106,26 @@ def __plot_TraditionalOE(t, OE, **kwargs):
     else:
         grid_rows, grid_columns = 3, 2
 
-    plt.subplot(grid_rows, grid_columns, 1)
-    plot_1d(t, OE[:,0], **kwargs) 
-    plt.ylabel("Semi Major Axis")
-    plt.subplot(grid_rows, grid_columns, 2)
-    plot_1d(t, OE[:,1], **kwargs)
-    plt.ylabel("Eccentricity")
-    plt.subplot(grid_rows, grid_columns, 3)
-    plot_1d(t, OE[:,2], **kwargs)
-    plt.ylabel("Inclination")
+    element_labels = ["$a$", "$e$", "$i$",
+                      "$\omega$", "$\Omega$", "$M$"]
+    
+    for i in range(len(OE[0])):
 
-    plt.subplot(grid_rows, grid_columns, 4)
-    plot_1d(t, OE[:,3], **kwargs) 
-    plt.ylabel("Arg of Periapsis")
-    plt.subplot(grid_rows, grid_columns, 5)
-    plot_1d(t, OE[:,4], **kwargs)
-    plt.ylabel("RAAN")
-    plt.subplot(grid_rows, grid_columns, 6)
-    plot_1d(t, OE[:,5], **kwargs)
-    plt.ylabel("M")
-    plt.suptitle("Traditional Elements")
+        # Plot elements separately or on a single plot
+        if options['individual_figures']:
+            kwargs.update({"new_fig" : True})
+        else:
+            plt.subplot(grid_rows, grid_columns, i+1)
+        plot_1d(t, OE[:,i], **kwargs) 
+        plt.ylabel(element_labels[i])
+    
+    if not options['individual_figures']:
+        plt.suptitle("Traditional Elements")
 
 def __plot_DelaunayOE(t, DelaunayOE, **kwargs):
     options = {
         "horizontal" : False,
+        "individual_figures" : False
     }
     options.update(kwargs)
     if options['horizontal']:
@@ -130,30 +133,21 @@ def __plot_DelaunayOE(t, DelaunayOE, **kwargs):
     else:
         grid_rows, grid_columns = 3, 2
 
-    plt.subplot(grid_rows, grid_columns, 1)
-    plot_1d(t, DelaunayOE[:,0], **kwargs) 
-    plt.ylabel("l")
-    plt.subplot(grid_rows, grid_columns, 2)
-    plot_1d(t, DelaunayOE[:,1], **kwargs) 
-    plt.ylabel("g")
-    plt.subplot(grid_rows, grid_columns, 3)
-    plot_1d(t, DelaunayOE[:,2], **kwargs) 
-    plt.ylabel("h")
-
-    plt.subplot(grid_rows, grid_columns, 4)
-    plot_1d(t, DelaunayOE[:,3], **kwargs) 
-    plt.ylabel("L")
-    plt.subplot(grid_rows, grid_columns, 5)
-    plot_1d(t, DelaunayOE[:,4], **kwargs) 
-    plt.ylabel("G")
-    plt.subplot(grid_rows, grid_columns, 6)
-    plot_1d(t, DelaunayOE[:,5], **kwargs) 
-    plt.ylabel("H")
+    element_labels = ["l", "g", "h", "L", "G", "H"]
+    for i in range(len(OE[0])):
+        # Plot elements separately or on a single plot
+        if options['individual_figures']:
+            kwargs.update({"new_fig" : True})
+        else:
+            plt.subplot(grid_rows, grid_columns, i+1)
+        plot_1d(t, DelaunayOE[:,i], **kwargs) 
+        plt.ylabel(element_labels[i])
     plt.suptitle("Delaunay Elements")
 
 def __plot_EquinoctialOE(t, EquinoctialOE, **kwargs):   
     options = {
         "horizontal" : False,
+        "individual_figures" : False
     }
     options.update(kwargs)
     if options['horizontal']:
@@ -161,51 +155,30 @@ def __plot_EquinoctialOE(t, EquinoctialOE, **kwargs):
     else:
         grid_rows, grid_columns = 3, 2
 
-    plt.subplot(grid_rows, grid_columns, 1)
-    plot_1d(t, EquinoctialOE[:,0], **kwargs) 
-    plt.ylabel("p")
-    plt.subplot(grid_rows, grid_columns, 2)
-    plot_1d(t, EquinoctialOE[:,1], **kwargs) 
-    plt.ylabel("f")
-    plt.subplot(grid_rows, grid_columns, 3)
-    plot_1d(t, EquinoctialOE[:,2], **kwargs) 
-    plt.ylabel("g")
-
-    plt.subplot(grid_rows, grid_columns, 4)
-    plot_1d(t, EquinoctialOE[:,3], **kwargs) 
-    plt.ylabel("L")
-    plt.subplot(grid_rows, grid_columns, 5)
-    plot_1d(t, EquinoctialOE[:,4], **kwargs) 
-    plt.ylabel("h")
-    plt.subplot(grid_rows, grid_columns, 6)
-    plot_1d(t, EquinoctialOE[:,5], **kwargs) 
-    plt.ylabel("k")
+    element_labels = ["p", "f", "g", "L", "h", "k"]
+    for i in range(len(OE[0])):
+        # Plot elements separately or on a single plot
+        if options['individual_figures']:
+            kwargs.update({"new_fig" : True})
+        else:
+            plt.subplot(grid_rows, grid_columns, i+1)
+        plot_1d(t, EquinoctialOE[:,i], **kwargs) 
+        plt.ylabel(element_labels[i])
     plt.suptitle("Equinoctial Elements")
 
 def __plot_MilankovitchOE(t, MilankovitchOE, **kwargs):   
-    plt.subplot(3,3,1)
-    plot_1d(t, MilankovitchOE[:,0], **kwargs) 
-    plt.ylabel("H1")
-    plt.subplot(3,3,2) 
-    plot_1d(t, MilankovitchOE[:,1], **kwargs) 
-    plt.ylabel("H2")
-    plt.subplot(3,3,3)
-    plot_1d(t, MilankovitchOE[:,2], **kwargs) 
-    plt.ylabel("H3")
-
-    plt.subplot(3,3,4)
-    plot_1d(t, MilankovitchOE[:,3], **kwargs) 
-    plt.ylabel("e1")
-    plt.subplot(3,3,5)
-    plot_1d(t, MilankovitchOE[:,4], **kwargs) 
-    plt.ylabel("e2")
-    plt.subplot(3,3,6)
-    plot_1d(t, MilankovitchOE[:,5], **kwargs) 
-    plt.ylabel("e3")
-
-    plt.subplot(3,3,8)
-    plot_1d(t, MilankovitchOE[:,6], **kwargs) 
-    plt.ylabel("l")
+    options = {
+        "individual_figures" : False
+    }
+    element_labels = ["$h_1$", "$h_2$", "$h_3$", "$e_1$", "$e_2$", "$e_3$", "$l$"]
+    for i in range(len(OE[0])):
+        # Plot elements separately or on a single plot
+        if options['individual_figures']:
+            kwargs.update({"new_fig" : True})
+        else:
+            plt.subplot(3, 3, i+1)
+        plot_1d(t, MilankovitchOE[:,i], **kwargs) 
+        plt.ylabel(element_labels[i])
     plt.suptitle("Milankovitch Elements")
 
 
