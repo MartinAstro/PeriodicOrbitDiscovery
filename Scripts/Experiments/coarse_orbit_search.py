@@ -70,8 +70,8 @@ def main():
         start_time = time.time()
 
         # Shooting solvers
-        bounds = ([0.7*scale, 0.001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
-                [1.1*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
+        bounds = ([0.0, 0.001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+                [10*planet.radius/lpe.l_star, 1.0, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
         decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False] 
         constraint_angle_wrap = [False, False, False, True, True, True, False] 
@@ -110,6 +110,7 @@ def main():
             "X_0" : [X_0], "X_0_sol" : [X_0_sol],
             "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
             "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
+            "lpe" : [lpe],
             "elapsed_time" : [elapsed_time],
             "result" : [results]
         }

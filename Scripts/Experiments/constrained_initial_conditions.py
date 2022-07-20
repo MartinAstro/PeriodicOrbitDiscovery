@@ -58,7 +58,7 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
                                 decision_variable_mask,
                                 constraint_variable_mask,
                                 constraint_angle_wrap,
-                                max_nfev=10) 
+                                rtol=1E-6, atol=1E-6, max_nfev=50) 
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
         elapsed_time = time.time() - start_time
@@ -84,79 +84,88 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
             "OE_0" : [OE_0[0]], "OE_0_sol" : [OE_0_sol[0]],
             "X_0" : [X_0], "X_0_sol" : [X_0_sol],
             "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
-            "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
+            "dX_0" : [dX_0], "dX_sol" : [dX_sol],     
+            "lpe" : [lpe],  
             "elapsed_time" : [elapsed_time],
             "result" : [results]
         }
         return data
 
 
-def solve_OE(model, OE_0, X_0, T_0, planet, experiment):
-        scale = 1.0 
-        lpe = LPE_Traditional(model.gravity_model, planet.mu, 
-                                    l_star=OE_0[0,0]/scale, 
-                                    t_star=T_0, 
-                                    m_star=1.0)
-        start_time = time.time()
+def bounds_and_mask_fcn(experiment, OE_0):
+    if experiment == "OE_constrained":
+        # Fix the semi major axis and inclination
+        bounds = ([0.9, 0.0001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+                  [1.1, 1.0,     np.pi,  2*np.pi,  2*np.pi,  2*np.pi, 2.0])
+        decision_variable_mask = [False, True, False, True, True, True, True]
+        constraint_variable_mask = [True, True, True, True, True, True, False] 
+        constraint_angle_wrap = [False, False, False, True, True, True, False] 
+    elif experiment == "OE_bounded":
+        # Allow semi-major axis and inclination to change, but only within a fixed window
+        i = OE_0[0,2]
+        bounds = ([0.9, 0.0001, i-np.pi/8, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+                [1.1, 1.0, i+np.pi/8, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
+        decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
+        constraint_variable_mask = [True, True, True, True, True, True, False] 
+        constraint_angle_wrap = [False, False, False, True, True, True, False] 
+    else: 
+        # All OE are allowed to change (though soft bounds are placed on semi major and eccentricity to assure convergence)
+        bounds = ([0.1, 0.0001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
+                [np.inf, 1.0, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
+        decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
+        constraint_variable_mask = [True, True, True, True, True, True, False] 
+        constraint_angle_wrap = [False, False, False, True, True, True, False] 
 
-        # Shooting solvers
-        
-        
-        if experiment == "OE_constrained":
-            bounds = ([0.7*scale, 0.1, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
-                    [1.1*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
-            decision_variable_mask = [False, True, False, True, True, True, True] # [OE, T] [N+1]
-            constraint_variable_mask = [True, True, True, True, True, True, False] 
-            constraint_angle_wrap = [False, False, False, True, True, True, False] 
-        elif experiment == "OE_bounded":
-            i = OE_0[0,2]
-            bounds = ([0.9*scale, 0.1, i-np.pi/8, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
-                    [1.1*scale, 0.5, i+np.pi/8, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
-            decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
-            constraint_variable_mask = [True, True, True, True, True, True, False] 
-            constraint_angle_wrap = [False, False, False, True, True, True, False] 
-        else:
-            bounds = ([0.1*scale, 0.1, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
-                    [np.inf*scale, 0.5, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
-            decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
-            constraint_variable_mask = [True, True, True, True, True, True, False] 
-            constraint_angle_wrap = [False, False, False, True, True, True, False] 
+    return bounds, decision_variable_mask, constraint_variable_mask, constraint_angle_wrap 
 
-        solver = ShootingLsSolver(lpe, 
-                                decision_variable_mask,
-                                constraint_variable_mask,
-                                constraint_angle_wrap,
-                                max_nfev=10) 
 
-        OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
-        elapsed_time = time.time() - start_time
+def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
+    bounds, decision_variable_mask, constraint_variable_mask, constraint_angle_wrap = bounds_and_mask_fcn(experiment, OE_0) 
 
-        # propagate the initial and solution orbits
-        init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
-        bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1E-7) 
-        
-        valid = check_for_intersection(bvp_sol, planet.obj_8k)
-        
-        dX_0 = print_state_differences(init_sol)
-        dX_sol = print_state_differences(bvp_sol)
+    lpe = LPE_Traditional(model.gravity_model, planet.mu, 
+                                l_star=OE_0[0,0], 
+                                t_star=T_0, 
+                                m_star=1.0,
+                                theta_star=2*np.pi)
+    start_time = time.time()
 
-        OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
-        OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
 
-        dOE_0, dOE_0_dimless = print_OE_differences(OE_trad_init, lpe, "IVP", constraint_angle_wrap)
-        dOE_sol, dOE_sol_dimless = print_OE_differences(OE_trad_bvp, lpe, "BVP", constraint_angle_wrap)
+    solver = ShootingLsSolver(lpe, 
+                            decision_variable_mask,
+                            constraint_variable_mask,
+                            constraint_angle_wrap,
+                            rtol=1E-6, atol=1E-6, max_nfev=50) 
 
-        data = {
-            "experiment" : [experiment],
-            "T_0" : [T_0], "T_0_sol" : [T_0_sol],
-            "OE_0" : [OE_0[0]], "OE_0_sol" : [OE_0_sol[0]],
-            "X_0" : [X_0], "X_0_sol" : [X_0_sol],
-            "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
-            "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
-            "elapsed_time" : [elapsed_time],
-            "result" : [results]
-        }
-        return data
+    OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
+    elapsed_time = time.time() - start_time
+
+    # propagate the initial and solution orbits
+    init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
+    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1E-7) 
+    
+    valid = check_for_intersection(bvp_sol, planet.obj_8k)
+    
+    dX_0 = print_state_differences(init_sol)
+    dX_sol = print_state_differences(bvp_sol)
+
+    OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
+    OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
+
+    dOE_0, dOE_0_dimless = print_OE_differences(OE_trad_init, lpe, "IVP", constraint_angle_wrap)
+    dOE_sol, dOE_sol_dimless = print_OE_differences(OE_trad_bvp, lpe, "BVP", constraint_angle_wrap)
+
+    data = {
+        "experiment" : [experiment],
+        "T_0" : [T_0], "T_0_sol" : [T_0_sol],
+        "OE_0" : [OE_0[0]], "OE_0_sol" : [OE_0_sol[0]],
+        "X_0" : [X_0], "X_0_sol" : [X_0_sol],
+        "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
+        "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
+        "lpe" : [lpe],  
+        "elapsed_time" : [elapsed_time],
+        "result" : [results]
+    }
+    return data
 
 def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
@@ -174,7 +183,7 @@ def main():
             "result" : []  
         })
 
-    experiment_list = ['cartesian', 'OE', 'OE_constrained', 'OE_bounded']
+    experiment_list = ['cartesian', 'OE', 'OE_constrained']
     OE_0, X_0, T_0, planet = sample_initial_conditions()
 
     for experiment in experiment_list:
@@ -189,6 +198,7 @@ def main():
     directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
     os.makedirs(directory, exist_ok=True)
     pd.to_pickle(df, directory + "constrained_orbit_solutions.data")
+
 
 
 if __name__ == "__main__":

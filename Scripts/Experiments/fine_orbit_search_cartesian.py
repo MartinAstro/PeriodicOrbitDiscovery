@@ -102,6 +102,7 @@ def main():
             "X_0" : [X_0], "X_0_sol" : [X_0_sol],
             "dOE_0" : [dOE_0], "dOE_sol" : [dOE_sol],
             "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
+            "lpe" : [lpe],
             "elapsed_time" : [elapsed_time],
             "result" : [results]
         }
