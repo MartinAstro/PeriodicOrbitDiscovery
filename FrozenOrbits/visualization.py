@@ -7,6 +7,27 @@ import matplotlib.pyplot as plt
 from GravNN.Visualization.VisualizationBase import VisualizationBase
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import matplotlib.ticker as mticker
+
+
+class MathTextSciFormatter(mticker.Formatter):
+    def __init__(self, fmt="%1.2e"):
+        self.fmt = fmt
+    def __call__(self, x, pos=None):
+        s = self.fmt % x
+        decimal_point = '.'
+        positive_sign = '+'
+        tup = s.split('e')
+        significand = tup[0].rstrip(decimal_point)
+        sign = tup[1][0].replace(positive_sign, '')
+        exponent = tup[1][1:].lstrip('0')
+        if exponent:
+            exponent = '10^{%s%s}' % (sign, exponent)
+        if significand and exponent:
+            s =  r'%s{\times}%s' % (significand, exponent)
+        else:
+            s =  r'%s%s' % (significand, exponent)
+        return "${}$".format(s)
 
 def plot_energy(sol, model):
     x = sol.y
@@ -55,6 +76,9 @@ def plot_3d(rVec, traj_cm=plt.cm.jet, solid_color=None, reverse_cmap=False, **kw
     ry = [rVec[1]]
     rz = [rVec[2]]
 
+    label = kwargs.get('label', None)
+    legend = kwargs.get('legend', None)
+    linewidth = kwargs.get('linewidth', None)
     # if there is a cmap specified, break the line into segments
     # and vary the color to show time evolution
     if traj_cm is not None and solid_color is None:
@@ -66,12 +90,12 @@ def plot_3d(rVec, traj_cm=plt.cm.jet, solid_color=None, reverse_cmap=False, **kw
             else:
                 cVec[i] = traj_cm(i/N)
             ax.plot(rx[0][i:i+2], ry[0][i:i+2], rz[0][i:i+2], 
-                    color=cVec[i], alpha=kwargs['line_opacity'])
+                    color=cVec[i], alpha=kwargs['line_opacity'], label=label, linewidth=linewidth)
     else:
         # Just plot a line, gosh.
         if solid_color is None:
             solid_color = 'black'
-        ax.plot(rx[0], ry[0], rz[0], c=solid_color, alpha=kwargs['line_opacity'])
+        ax.plot(rx[0], ry[0], rz[0], c=solid_color, alpha=kwargs['line_opacity'], label=label, linewidth=linewidth)
 
     maxVal = max([max(np.abs(np.concatenate((plt.gca().get_xlim(), rx[0])))), 
                   max(np.abs(np.concatenate((plt.gca().get_ylim(), ry[0])))), 
@@ -85,7 +109,12 @@ def plot_3d(rVec, traj_cm=plt.cm.jet, solid_color=None, reverse_cmap=False, **kw
     ax.set_xlabel('x')
     ax.set_ylabel('y')
 
-    ax.view_init(90, 0)
+    ax.xaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
+    ax.yaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
+    ax.zaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
+    
+    # ax.view_init(90, 30)
+    ax.view_init(45, 45)
     plt.tight_layout()
 
     return ax
