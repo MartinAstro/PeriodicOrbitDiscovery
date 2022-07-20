@@ -44,6 +44,7 @@ def main():
     
     planet = model.config['planet'][0]
     poly_model = polyhedralGravityModel(planet, planet.obj_8k)
+    poly_200_model = polyhedralGravityModel(planet, planet.obj_200k)
 
     df = pd.DataFrame({
             "dt_pinn" : [], 
@@ -52,7 +53,7 @@ def main():
             "Xf_poly" : [],  
             })
 
-    for k in range(10):
+    for k in range(5):
         print(f"Iteration {k}")
         OE_0, X_0, T_0, planet = sample_initial_conditions()
 
@@ -65,12 +66,21 @@ def main():
         poly_sol = propagate_orbit(T_0, X_0, poly_model, tol=1E-7) 
         dt_poly = time.time() - poly_start_time
 
+        poly_200_start_time = time.time()
+        poly_200_sol = propagate_orbit(T_0, X_0, poly_200_model, tol=1E-7) 
+        dt_poly_200 = time.time() - poly_200_start_time
+
         df_k = pd.DataFrame().from_dict({ 
             "index" : [k],
             "dt_pinn" : [dt_pinn], 
             "dt_poly" : [dt_poly], 
+            "dt_poly_200" : [dt_poly_200], 
+            "pinn_sol" : [pinn_sol],
+            "poly_sol" : [poly_sol],
+            "poly_200_sol" : [poly_200_sol],
             "Xf_pinn" : [pinn_sol.y[:,-1]],  
             "Xf_poly" : [poly_sol.y[:,-1]],  
+            "semi" : [OE_0[0,0]]
             }).set_index("index")
 
         df = pd.concat([df, df_k], axis=0)

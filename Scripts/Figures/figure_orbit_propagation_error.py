@@ -18,7 +18,7 @@ from GravNN.CelestialBodies.Asteroids import Eros
 import OrbitalElements.orbitalPlotting as op
 from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
-plt.rc('font', size= 10.0)
+
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
 
     vis = VisualizationBase(save_directory=os.path.dirname(FrozenOrbits.__file__) + "/../Plots/")
     # (width, height)
-    vis.newFig(fig_size=(3.25, 3.25)) # position
+    vis.newFig(fig_size=(3.25*0.9, 3.25)) # position
     # vis.newFig(fig_size=(2.1, 3.25*0.618)) # position
     # vis.newFig(fig_size=vis.half_page) # position
     # vis.newFig(fig_size=(2.1, 1.1)) # velocity
@@ -68,31 +68,38 @@ def main():
         
         plt.figure(1)
         ax3 = plt.subplot(3,1,3)
-        plt.plot(pinn_sol.t, acc_diff_mag, linewidth=0.5)
-        plt.ylabel(r"$\delta a$ [m/s$^2$]", fontsize=10)
-        plt.xlabel("Time [s]", fontsize=10)
-        plt.gca().xaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
+        plt.plot(pinn_sol.t, acc_diff_mag, linewidth=1)
+        plt.ylabel(r"$\delta a$ [m/s$^2$]", fontsize=8)
+        plt.xlabel("Time [s]", fontsize=8)
+        plt.gca().xaxis.set_major_formatter(MathTextSciFormatter("%1.1e"))
         plt.gca().yaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
         plt.gca().tick_params(labelsize=8)
+        plt.xticks(rotation=30)
+        plt.yscale('log')
+        plt.grid(which='both',linestyle="--", linewidth=0.1, color='.25', zorder=-10)
 
 
         plt.subplot(3,1,1)
-        plt.plot(pinn_sol.t, pos_diff_mag, linewidth=0.5)
-        plt.ylabel(r"$\delta x$ [m]", fontsize=10)
+        plt.plot(pinn_sol.t, pos_diff_mag, linewidth=1)
+        plt.ylabel(r"$\delta x$ [m]", fontsize=8)
         plt.gca().set_xticklabels([])
         plt.gca().yaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
         plt.gca().tick_params(labelsize=8)
+        plt.yscale('log')
+        plt.grid(which='both',linestyle="--", linewidth=0.1, color='.25', zorder=-10)
 
         # plt.xlabel("Time [s]")
 
         # plt.figure(2)
         plt.subplot(3,1,2)
-        plt.plot(pinn_sol.t, vel_diff_mag, linewidth=0.5)
-        plt.ylabel(r"$\delta v$ [m/s]", fontsize=10)
+        plt.plot(pinn_sol.t, vel_diff_mag, linewidth=1)
+        plt.ylabel(r"$\delta v$ [m/s]", fontsize=8)
         plt.gca().set_xticklabels([])
         plt.gca().yaxis.set_major_formatter(MathTextSciFormatter("%1.0e"))
         plt.gca().tick_params(labelsize=8)
-
+        plt.yscale('log')
+        plt.grid(which='both',linestyle="--", linewidth=0.1, color='.25', zorder=-10)
+        plt.tight_layout()
         # plt.xlabel("Time [s]")
 
         color = plt.gca().lines[-1].get_color()
@@ -100,10 +107,10 @@ def main():
         plt.figure(2)
         plot_cartesian_state_3d(pinn_sol.y.T, planet.obj_8k, solid_color=color, 
                                 new_fig=False,plot_start_point=False,
-                                linewidth=0.5)
+                                linewidth=1)
         plot_cartesian_state_3d(poly_sol.y.T, planet.obj_8k, solid_color=color, linestyle='--', 
                                 new_fig=False,plot_start_point=False,
-                                linewidth=0.5)
+                                linewidth=1)
         plt.gca().tick_params(labelsize=8)
         plt.gca().xaxis.set_major_locator(plt.MaxNLocator(4))
         plt.gca().yaxis.set_major_locator(plt.MaxNLocator(4))
