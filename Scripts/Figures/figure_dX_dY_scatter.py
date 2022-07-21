@@ -11,6 +11,24 @@ from FrozenOrbits.visualization import *
 from GravNN.CelestialBodies.Asteroids import Eros
 
 
+vis = VisualizationBase()
+vis.fig_size = vis.tri_page
+vis.fig_size = (2.1, 2.1*1.25)
+plt.rc('font', size=8)
+plt.rc('axes', labelsize=8)
+plt.rc('axes', linewidth=1)
+plt.rc('lines', markersize=1)
+plt.rc('xtick.major', size=4)
+plt.rc('xtick.minor', size=4)
+plt.rc('ytick', labelsize=8)
+plt.rc('xtick', labelsize=8)
+plt.rc('xtick', direction='in')
+plt.rc('ytick', direction='in')
+plt.rc('axes', labelpad=1)
+plt.rc('lines', markersize=6)
+# plt.rc('xaxis', labellocation='right')
+# plt.rc('yaxis', labellocation='top')
+
 
 
 def dr_coordinates(df, **kwargs):
@@ -107,8 +125,8 @@ def plot_scatter_with_arrow(df, coord_fcn, **kwargs):
 
     X_0, X_f, Y_0, Y_f = coord_fcn(df, **kwargs)
 
-    plt.scatter(X_0, Y_0, marker=options['start_marker'], c=options['start_color'], s=6)
-    plt.scatter(X_f, Y_f, marker=options['end_marker'], c=options['end_color'], s=6)
+    plt.scatter(X_0, Y_0, marker=options['start_marker'], c=options['start_color'])
+    plt.scatter(X_f, Y_f, marker=options['end_marker'], c=options['end_color'])
     plt.plot([X_0, X_f], [Y_0, Y_f],
                 color=options['arrow_color'],
                 alpha=options['arrow_opacity'],
@@ -116,6 +134,7 @@ def plot_scatter_with_arrow(df, coord_fcn, **kwargs):
 
     plt.xlabel(options['x_label'], c=options['x_label_color'])
     plt.ylabel(options['y_label'], c=options['y_label_color'])
+    # plt.title(f"{options['x_label']} vs {options['y_label']}")
     if options['log_scale']:
         plt.xscale('log')
         plt.yscale('log')
@@ -148,8 +167,6 @@ def plot_results(df, coord_fcn, **kwargs):
 
 
 def plot_dr_results(df_coarse, df_fine, base_figure_name, **kwargs):
-    vis = VisualizationBase()
-    vis.fig_size = vis.half_page
     vis.newFig()
     plot_results(df_coarse, dr_coordinates,**kwargs)
     plot_results(df_fine, dr_coordinates, 
@@ -160,8 +177,6 @@ def plot_dr_results(df_coarse, df_fine, base_figure_name, **kwargs):
     vis.save(plt.gcf(), f"{base_figure_name}_dr.pdf")
 
 def plot_dv_results(df_coarse, df_fine, base_figure_name, **kwargs):
-    vis = VisualizationBase()
-    vis.fig_size = vis.half_page
     vis.newFig()
     plot_results(df_coarse, dv_coordinates, **kwargs)
     plot_results(df_fine, dv_coordinates, 
@@ -172,8 +187,7 @@ def plot_dv_results(df_coarse, df_fine, base_figure_name, **kwargs):
     vis.save(plt.gcf(), f"{base_figure_name}_dv.pdf")
     
 def plot_dOE_results(df_coarse, df_fine, base_figure_name, **kwargs):
-    vis = VisualizationBase()
-    vis.fig_size = vis.half_page
+
     vis.newFig()
     plot_results(df_coarse, dOE_coordinates, **kwargs)
     plot_results(df_fine, dOE_coordinates, 
@@ -181,7 +195,6 @@ def plot_dOE_results(df_coarse, df_fine, base_figure_name, **kwargs):
                     end_marker='*', 
                     x_label=r"$\delta \tilde{\oe}$ [-]",
                     y_label=r"$\delta \oe$ [-]", **kwargs)
-
     vis.save(plt.gcf(), f"{base_figure_name}_dOE.pdf")
 
 

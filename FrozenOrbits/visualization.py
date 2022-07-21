@@ -293,7 +293,7 @@ def plot_cartesian_state_3d(X, obj_file=None, **kwargs):
 
     if options["new_fig"]:
         vis = VisualizationBase(formatting_style='AIAA')
-        fig, ax = vis.new3DFig()
+        fig, ax = vis.new3DFig(**kwargs)
     else:
         ax = plt.gca()
 

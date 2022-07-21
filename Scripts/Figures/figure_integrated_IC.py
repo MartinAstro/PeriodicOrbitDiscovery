@@ -19,6 +19,19 @@ import OrbitalElements.orbitalPlotting as op
 from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
+plt.rc('font', size=8)
+plt.rc('axes', labelsize=8)
+plt.rc('axes', linewidth=1)
+plt.rc('lines', markersize=1)
+plt.rc('xtick.major', size=4)
+plt.rc('xtick.minor', size=4)
+plt.rc('ytick', labelsize=8)
+plt.rc('xtick', labelsize=8)
+plt.rc('xtick', direction='in')
+plt.rc('ytick', direction='in')
+plt.rc('axes', labelpad=1)
+plt.rc('lines', markersize=6)
+plt.rc('lines', linewidth=1)
 
 def sample_initial_conditions(df, k):
     planet = Eros()
@@ -31,6 +44,7 @@ def sample_initial_conditions(df, k):
 
 def plot_integrated_orbits(coarse_df, fine_df, base_figure_name):
     vis = VisualizationBase()
+    vis.fig_size = (2.1, 2.1*1.25)
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
     solid_color_list = ['blue', 'red', 'green']
@@ -47,7 +61,7 @@ def plot_integrated_orbits(coarse_df, fine_df, base_figure_name):
             model, 
             tol=1E-7,
             t_eval=t_eval_original) 
-        plot_cartesian_state_3d(original_orbit_sol.y.T, planet.obj_8k, new_fig=True, solid_color='black', line_opacity=0.5)
+        plot_cartesian_state_3d(original_orbit_sol.y.T, planet.obj_8k, new_fig=True, solid_color='black', line_opacity=0.5, fig_size=vis.fig_size)
         
         # Corrected Orbit
         t_eval_solution = np.linspace(0, T_0_sol, 100)
@@ -57,7 +71,7 @@ def plot_integrated_orbits(coarse_df, fine_df, base_figure_name):
             model, 
             tol=1E-7,
             t_eval=t_eval_solution) 
-        plot_cartesian_state_3d(solution_orbit_sol.y.T, None, new_fig=False, solid_color=solid_color_list[k])
+        plot_cartesian_state_3d(solution_orbit_sol.y.T, None, new_fig=False, solid_color=solid_color_list[k], fig_size=vis.fig_size)
         vis.save(plt.gcf(), f"{base_figure_name}_{k}_corrected.pdf")
 
         # Corrected Orbit Propagated for 10 periods
@@ -69,7 +83,7 @@ def plot_integrated_orbits(coarse_df, fine_df, base_figure_name):
             model, 
             tol=1E-7,
             t_eval=t_eval_solution) 
-        plot_cartesian_state_3d(solution_orbit_sol.y.T, planet.obj_8k, new_fig=True, cmap=color_list[k])
+        plot_cartesian_state_3d(solution_orbit_sol.y.T, planet.obj_8k, new_fig=True, cmap=color_list[k], fig_size=vis.fig_size)
         vis.save(plt.gcf(), f"{base_figure_name}_{k}_corrected_x10.pdf")
 
 
