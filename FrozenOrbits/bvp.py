@@ -463,6 +463,9 @@ class ShootingSolver(ABC):
         V_0 = X_0[self.decision_variable_mask]
         V_solution_bounds = np.array(solution_bounds)[:,self.decision_variable_mask]
 
+        print(f"OE_0 tilde : {OE_0_dim}")
+        print(f"OE_0 : {OE_0}")
+        
         return X_0, V_0, V_solution_bounds, T
     
     @abstractmethod
@@ -686,6 +689,9 @@ class CartesianShootingSolver(ABC):
         X_0 = np.hstack((OE_0.reshape((-1)), T)) # Decision variables that can be updated
         V_0 = X_0[self.decision_variable_mask]
         V_solution_bounds = np.array(solution_bounds)[:,self.decision_variable_mask]
+
+        print(f"OE_0 tilde : {OE_0_dim}")
+        print(f"OE_0 : {OE_0}")
 
         return X_0, V_0, V_solution_bounds, T
     

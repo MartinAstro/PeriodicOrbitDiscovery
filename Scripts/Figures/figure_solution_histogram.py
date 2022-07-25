@@ -57,6 +57,7 @@ def gather_integrated_orbits(df):
 
 def plot_solution_histogram(cart_orbit_list, **kwargs):
     percent_error_list = []
+    position_error_list = []
     for orbit in cart_orbit_list:
         X_0 = orbit.y[:,0]
         X_f = orbit.y[:,-1]
@@ -64,13 +65,15 @@ def plot_solution_histogram(cart_orbit_list, **kwargs):
         dX_percent = np.abs(dX / X_0) * 100
         dX_percent_mag = np.average(dX_percent)
         percent_error_list.append(dX_percent_mag)
-    
-    range = kwargs.get('range', [0, np.max(percent_error_list)])
+        position_error_list.append(np.linalg.norm(dX[0:3]))
+
+    # range = kwargs.get('range', [0, np.max(percent_error_list)])
+    range = kwargs.get('range', [0, np.max(position_error_list)])
     kwargs.update({"range" : range})
     # range=None
-    print(percent_error_list)
-    plt.hist(percent_error_list,
-             bins=np.logspace(np.log10(1E-3),np.log10(5E2), 50),
+    print(position_error_list)
+    plt.hist(position_error_list,
+             bins=np.logspace(np.log10(1),np.log10(10**6), 50),
             #  range=[np.log10(1E-2), np.log10(5E2)],
              **kwargs)
     return range
@@ -87,11 +90,11 @@ def main():
     vis = VisualizationBase()
     vis.newFig()
     
-    range = plot_solution_histogram(sol_cart, color='orange', label='Cartesian LPE', alpha=0.8)
-    plot_solution_histogram(sol_OE, color='blue', label='OE LPE', alpha=0.8)#, range=range)
+    range = plot_solution_histogram(sol_cart, color='orange', label='Cartesian Shooting Method', alpha=0.8)
+    plot_solution_histogram(sol_OE, color='blue', label='OE Shooting Method', alpha=0.8)#, range=range)
     plt.xscale('log')
     plt.legend()
-    plt.xlabel("Average Percent Error")
+    plt.xlabel("Cartesian State Error after 10 Orbits [m]")
     plt.ylabel("\# of Solutions")
     base_figure_name = os.path.basename(__file__).split('.py')[0]
     vis.save(plt.gcf(), f"{base_figure_name}.pdf")
