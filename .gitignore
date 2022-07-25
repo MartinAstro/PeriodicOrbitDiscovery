@@ -4,6 +4,8 @@ Notes/*
 iterative_bvp/*
 Data/*
 Plots/*
+FrozenOrbits/Data/*
+.vscode/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
