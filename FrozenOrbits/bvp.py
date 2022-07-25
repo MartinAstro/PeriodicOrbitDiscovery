@@ -1,18 +1,12 @@
 
-from unittest import TestResult
-from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.coordinate_transforms import *
 from FrozenOrbits.constraints import *
-from FrozenOrbits.LPE import LPE
 
 import numpy as np
 import pandas as pd
 import copy
 import time
 from FrozenOrbits.dynamics import *
-from FrozenOrbits.utils import calc_angle_diff
-
-from GravNN.Support.transformations import cart2sph, invert_projection
 from scipy.integrate import solve_ivp
 from scipy.optimize import least_squares, root, minimize, basinhopping
 from GravNN.Support.ProgressBar import ProgressBar
@@ -60,17 +54,6 @@ def print_result_info(result):
     Number of Function Evals: {result.nfev} \t Number of Jacobian Evals: {result.njev}")
     """)
 
-def update_state(X_0, X_subset, decision_variable_mask):
-    k = 0
-    X_updated = copy.deepcopy(X_0)
-    for i in range(len(X_updated)):
-        # Only update allowed decision variables
-        if decision_variable_mask[i]:
-            X_updated[i] = X_subset[k]
-            k += 1
-
-    X_updated = np.array([X_updated]) # the non-dim OE
-    return X_updated
 
 def non_dimensionalize(OE_dim, T_dim, lpe):
     OE = lpe.non_dimensionalize_state(OE_dim).numpy()
@@ -198,245 +181,9 @@ def general_variable_time_bvp_trad_OE(T_dim, OE_0_dim, model, element_set, decis
 
     return OE_i_p1, x_i_p1, T_i_p1
 
-########################
-## Vector Constraints ##
-########################
-
-def constraint_shooting(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask, 
-    rtol, 
-    atol):
-    
-    x_i = update_state(x_0[:-1], V_0, decision_variable_mask).reshape((-1,))
-    x_i = x_i.reshape((-1,))
-    if decision_variable_mask[-1]:
-        T = V_0[-1]
-    else:
-        T = x_0[-1]
-
-    # Propagate the updated state
-    pbar = ProgressBar(T, enable=False)
-    sol = solve_ivp(dynamics_OE, 
-            [0, T],
-            x_i.reshape((-1,)), 
-            args=(lpe, pbar),
-            atol=atol, rtol=rtol
-            )
-    pbar.close()
-    x_f = sol.y[:,-1]
-
-    # Calculate the constraint vector
-    C = x_f - x_i 
-    C = np.hstack((C, [0.0])) # add the period to the constraint ()
-
-    # Wrap angles depending on the element set
-    for i in range(len(x_f)):
-        if constraint_angle_wrap_mask[i]:
-            C[i] = calc_angle_diff(x_i[i], x_f[i])
-            C[i] = C[i] / lpe.theta_star # scale the angles to be 1 rather than 2*np.pi
-    C = C[constraint_variable_mask] # remove masked variables
-    return C
-
-def constraint_shooting_jac(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask,
-    constraint_angle_wrap_mask,
-    rtol, 
-    atol):
-    N = len(x_0) - 1 # Remove from the state
-    phi_0 = np.identity(N)
-
-    # Only update allowed decision variables
-    x_i = update_state(x_0[:-1], V_0, decision_variable_mask)
-    x_i = x_i.reshape((-1,))
-
-    if decision_variable_mask[-1]:
-        T = V_0[-1]
-    else:
-        T = x_0[-1]
-
-    # Propagate the corrected state
-    z_i = np.hstack((
-        x_i.reshape((-1,)),
-        phi_0.reshape((-1)))
-        )
-
-    pbar = ProgressBar(T, enable=True)
-    sol = solve_ivp(dynamics_OE_w_STM, 
-                    [0, T],
-                    z_i.reshape((-1,)),
-                    args=(lpe,pbar),
-                    atol=atol, rtol=rtol,
-                    #method='LSODA'
-                    )
-    pbar.close()
-    z_f = sol.y[:,-1]
-    x_f = z_f[:N]
-    phi_ti_t0 = np.reshape(z_f[N:], (N,N))
-    x_dot_f = lpe.dOE_dt(x_f)
-
-    # Evaluate the general jacobian
-    D = np.hstack([phi_ti_t0 - np.eye(N), x_dot_f.reshape((N,-1))])
-
-    # Append a time variable row
-    D = np.vstack((D, np.zeros((N+1))))
-
-    # Remove specified decision variables from jacobian
-    D = D[:, decision_variable_mask] # remove columns in D
-
-    # Scale angle constraints by 2*pi
-    for i in range(len(x_f)):
-        if constraint_angle_wrap_mask[i]:
-            D[i] = D[i] / lpe.theta_star # scale the angles to be 1 rather than 2*np.pi 
-
-    # # Remove constraint variables
-    D = D[constraint_variable_mask, :] # remove rows in D
-
-    return D
-
-def constraint_instantaneous(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask):
-    
-    x_i = update_state(x_0, V_0, decision_variable_mask)
-    C = lpe.dOE_dt(x_i)
-    C = C[constraint_variable_mask] # remove masked variables
-
-    return C
-
-def constraint_instantaneous_jac(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask,
-    constraint_angle_wrap_mask):
-
-    # Only update allowed decision variables
-    x_i = update_state(x_0, V_0, decision_variable_mask)
-
-    # Evaluate the general jacobian
-    D = lpe.dOE_dt_dx(x_i)
-
-    # Remove specified decision variables from jacobian
-    D = D[:, decision_variable_mask] # remove columns in D
-    
-    D = D[constraint_variable_mask, :] # remove rows in D
-
-    return D
-
-########################
-## Scalar Constraints ##
-########################
-
-def constraint_shooting_scalar(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask):
-    
-    C = constraint_shooting(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask)
-    return np.linalg.norm(C)**2
-
-def constraint_shooting_jac_scalar(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask,
-    constraint_angle_wrap_mask):
-
-    C = constraint_shooting(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask)
-
-    D = constraint_shooting_jac(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask)
-
-    D_scalar = np.zeros((len(D),))
-    for i in range(len(D)):
-        D_scalar += 2*C[i]*D[i,:]
-    
-    return D
-
-def constraint_instantaneous_scalar(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask):
-    
-    C = constraint_instantaneous(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask)
-
-    return np.linalg.norm(C)**2
-
-def constraint_instantaneous_jac_scalar(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask,
-    constraint_angle_wrap_mask):
-
-    D = constraint_instantaneous_jac(V_0, lpe, x_0, 
-    decision_variable_mask, 
-    constraint_variable_mask, 
-    constraint_angle_wrap_mask)
-
-    D_scalar = np.zeros((len(D),))
-    for i in range(len(D)):
-        D_scalar += D[i,:]
-    
-    return D
-
-
-
 ##############################
 ## Solver Interface Classes ##
 ##############################
-
-class InstantaneousSolver(ABC):
-    def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None):
-        self.lpe = lpe
-        self.element_set = lpe.element_set
-
-        if decision_variable_mask is None:
-            decision_variable_mask = [True]*(lpe.num_elements+1) # N + 1
-        self.decision_variable_mask = decision_variable_mask
-        if constraint_variable_mask is None:
-            constraint_variable_mask = [True]*(lpe.num_elements) # N + 1
-        self.constraint_variable_mask = constraint_variable_mask
-        if constraint_angle_wrap_mask is None:
-            constraint_angle_wrap_mask = [True]*(lpe.num_elements+1) # N + 1
-        self.constraint_angle_wrap_mask = constraint_angle_wrap_mask
-
-        pass
-    
-    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
-        OE_0, T = non_dimensionalize(OE_0_dim, T_dim, self.lpe)
-        X_0 = OE_0.reshape((-1)) # Decision variables that can be updated
-        V_0 = X_0[self.decision_variable_mask]
-        V_solution_bounds = np.array(solution_bounds)[:,self.decision_variable_mask]
-        return X_0, V_0, V_solution_bounds, T
-    
-    @abstractmethod
-    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
-        pass
-    
-    def prepare_outputs(self, X_0, T, result):
-        print_result_info(result)
-
-        OE_f = update_state(X_0, result.x, self.decision_variable_mask)
-        T_f = T
-
-        OE_0_sol, T_sol = dimensionalize(OE_f, T_f, self.lpe)
-        X_0_sol = oe2cart_tf(OE_0_sol, self.lpe.mu_tilde, self.element_set).numpy()[0]
-        return OE_0_sol, X_0_sol, T_sol, result
-
-    def solve(self, OE_0_dim, T_dim, solution_bounds):
-        X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
-        result = self.solve_subroutine(X_0, V_0, V_solution_bounds)
-        return self.prepare_outputs(X_0, T, result)
 
 class ShootingSolver(ABC):
     def __init__(self, lpe, decision_variable_mask=None, constraint_variable_mask=None, constraint_angle_wrap_mask=None, rtol=1E-3, atol=1E-6, max_nfev=None):
@@ -487,112 +234,6 @@ class ShootingSolver(ABC):
         X_0, V_0, V_solution_bounds, T = self.initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
         result = self.solve_subroutine(X_0, V_0, V_solution_bounds)
         return self.prepare_outputs(X_0, T, result)
-
-class InstantaneousLsSolver(InstantaneousSolver):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)    
-        pass
-
-    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
-        return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
-
-    def prepare_outputs(self, X_0, T, result):
-        return super().prepare_outputs(X_0, T, result)
-
-    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
-        result = least_squares(constraint_instantaneous, V_0, constraint_instantaneous_jac, 
-                                    args=(
-                                        self.lpe, 
-                                        X_0,
-                                        self.decision_variable_mask,
-                                        self.constraint_variable_mask,
-                                        self.constraint_angle_wrap_mask),
-                                    bounds=V_solution_bounds,
-                                    verbose=2,
-                                    xtol=None,
-                                    ftol=None,
-                                    # method='dogbox'
-                                    )
-        return result
-
-class InstantaneousRootSolver(InstantaneousSolver):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)    
-
-    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
-        return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
-
-    def prepare_outputs(self, X_0, T, result):
-        return super().prepare_outputs(X_0, T, result)
-
-    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
-        V_bounds_tuple = []
-        for i in range(len(V_solution_bounds[0])):
-            V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
-
-        result = root(constraint_instantaneous, V_0, jac=constraint_instantaneous_jac, 
-                            args=(
-                                self.lpe, 
-                                X_0,
-                                self.decision_variable_mask,
-                                self.constraint_variable_mask,
-                                self.constraint_angle_wrap_mask),
-                            #bounds=V_bounds_tuple,
-                            )
-        return result
-
-class InstantaneousMinimizeSolver(InstantaneousSolver):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)    
-
-    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
-        return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
-
-    def prepare_outputs(self, X_0, T, result):
-        return super().prepare_outputs(X_0, T, result)
-
-    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
-        V_bounds_tuple = []
-        for i in range(len(V_solution_bounds[0])):
-            V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
-
-        result = minimize(constraint_instantaneous_scalar, V_0, 
-                            args=(
-                                self.lpe, 
-                                X_0,
-                                self.decision_variable_mask,
-                                self.constraint_variable_mask,
-                                self.constraint_angle_wrap_mask),
-                            tol=1E-48,
-                            bounds=V_bounds_tuple,
-                            )
-        return result
-
-class InstantaneousBasinHoppingSolver(InstantaneousSolver):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)    
-
-    def initialize_solver_args(self, OE_0_dim, T_dim, solution_bounds):
-        return super().initialize_solver_args(OE_0_dim, T_dim, solution_bounds)
-
-    def prepare_outputs(self, X_0, T, result):
-        return super().prepare_outputs(X_0, T, result)
-
-    def solve_subroutine(self, X_0, V_0, V_solution_bounds):
-        V_bounds_tuple = []
-        for i in range(len(V_solution_bounds[0])):
-            V_bounds_tuple.append(tuple(V_solution_bounds[:,i]))
-
-        result = basinhopping(constraint_instantaneous_scalar, V_0, 
-                            minimizer_kwargs={'args' : (
-                                self.lpe, 
-                                X_0,
-                                self.decision_variable_mask,
-                                self.constraint_variable_mask,
-                                self.constraint_angle_wrap_mask)},
-                            disp=True
-                            )
-        return result
 
 class ShootingLsSolver(ShootingSolver):
     def __init__(self, *args, **kwargs):
@@ -660,7 +301,6 @@ class ShootingMinimizeSolver(ShootingSolver):
                             )
         return result
     
-
 
 #######################
 ## Cartesian Solvers ##
