@@ -268,5 +268,5 @@ def OE_constraint(x_f, phi_f, x_0, T_i, model, k, decision_variable_mask=None, c
     else: 
         T_corrected = T_i
 
-    print_update(x_0, x_corrected, T_i, T_corrected, k, C)
+    # print_update(x_0, x_corrected, T_i, T_corrected, k, C)
     return x_corrected, T_corrected

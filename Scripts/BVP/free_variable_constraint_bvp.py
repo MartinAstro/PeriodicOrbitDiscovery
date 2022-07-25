@@ -5,7 +5,6 @@ from FrozenOrbits.bvp import variable_time_mirror_bvp
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
-from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.gravity_models import (pinnGravityModel,
                                          polyhedralGravityModel)
 from FrozenOrbits.LPE import LPE
