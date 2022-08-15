@@ -8,17 +8,3 @@ By using a trained PINN-GM, this work expands the types of shooting method that 
 
 ## Watch the Video!
 [![Watch the video](https://img.youtube.com/vi/9M3PZGoWVTc/maxresdefault.jpg)](https://youtu.be/9M3PZGoWVTc)
-
-<style>
-  .arrow {
-    pad:25px;
-    font-size:128px;
-    align:center;
-    }
-</style>
-
-<div style="display:flex; flex-direction: row; justify-content: center; align-items: center">
-  <img width=400px src="docs/source/assets/figure_integrated_IC_cart_1_corrected_x10.png">
-  <div class='arrow' > → </div>
-  <img width=400px src="docs/source/assets/figure_integrated_IC_1_corrected_x10.png">
-</div>
