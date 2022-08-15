@@ -7,10 +7,10 @@ This work introduces the [Physics-Informed Neural Network Gravity Model (PINN-GM
 By using a trained PINN-GM, this work expands the types of shooting method that can be conducted. Namely, no longer does the shooting method need to be conducted in cartesian space. Instead, descriptions like the classical orbital elements can be used in the shooting method. This change considerably reduces the domain of search space due to the natural bounding of the orbital elements (via angle-wrapping or bounded eccentricities) and ensures that the solutions found are not only periodic in cartesian space, but also in element space -- assisting in converging to solutions that maintain desireable orbital characteristics over extended periods of time. Moreover, by using orbital element shooting methods, constrained optimizations can be used which enforce bounds on particular orbital elements when searching for a periodic orbit solution which can assist trajectory designers in searching for stable trajectories which also satisfy particular mission requirements.
 
 <div align="center">
-  <img src="docs/source/assets/figure_integrated_IC_cart_1_corrected_x10.pdf">
+  <img src="docs/source/assets/figure_integrated_IC_cart_1_corrected_x10.png">
 </div>
 
 <div align="center">
-  <img src="docs/source/assets/figure_integrated_IC_1_corrected_x10.pdf ">
+  <img src="docs/source/assets/figure_integrated_IC_1_corrected_x10.png">
 </div>
 
