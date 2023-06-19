@@ -1,20 +1,17 @@
 import os
-from FrozenOrbits.analysis import check_for_intersection, print_state_differences
-from FrozenOrbits.bvp import general_variable_time_bvp_trad_OE
-from FrozenOrbits.coordinate_transforms import trad2cart_tf
 
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
+
+from FrozenOrbits.analysis import check_for_intersection, print_state_differences
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
-from FrozenOrbits.LPE import LPE, LPE_Traditional
+from FrozenOrbits.bvp import general_variable_time_bvp_trad_OE
+from FrozenOrbits.gravity_models import pinnGravityModel
+from FrozenOrbits.LPE import LPE_Traditional
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import plot_cartesian_state_3d
-from GravNN.CelestialBodies.Asteroids import Eros
 from Scripts.BVP.initial_conditions import not_periodic_IC
-
 
 # def get_initial_conditions(R, mu):
 #     OE = np.array([[5*R, 0.3, np.pi/4, np.pi/4, np.pi/4, np.pi/4]]) # Good example

@@ -1,23 +1,24 @@
 import os
-import copy
 import time
-import pandas as pd
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
 import GravNN
-import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from GravNN.CelestialBodies.Asteroids import Eros
+
 import FrozenOrbits
+from FrozenOrbits.analysis import (
+    check_for_intersection,
+    print_OE_differences,
+    print_state_differences,
+)
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
 
@@ -45,7 +46,7 @@ def main():
             "dOE_0" : [], "dOE_sol" : [],
             "dX_0" : [], "dX_sol" : [],   
             "lpe" : [], "elapsed_time" : [],
-            "result" : []    
+            "result" : [],    
         })
 
     for k in range(10):
@@ -87,7 +88,7 @@ def main():
         init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
         bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1E-7) 
         
-        valid = check_for_intersection(bvp_sol, planet.obj_8k)
+        check_for_intersection(bvp_sol, planet.obj_8k)
         
         dX_0 = print_state_differences(init_sol)
         dX_sol = print_state_differences(bvp_sol)
@@ -107,7 +108,7 @@ def main():
             "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
             "lpe" : [lpe],
             "elapsed_time" : [elapsed_time],
-            "result" : [results]
+            "result" : [results],
         }
         df_k = pd.DataFrame().from_dict(data)
         df = pd.concat([df, df_k], axis=0)

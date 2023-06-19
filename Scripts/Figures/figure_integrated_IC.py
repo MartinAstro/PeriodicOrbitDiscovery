@@ -1,22 +1,18 @@
 import os
-import copy
-import time
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
-import FrozenOrbits
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
+from GravNN.CelestialBodies.Asteroids import Eros
+
+import FrozenOrbits
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
 plt.rc('font', size=8)

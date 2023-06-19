@@ -1,24 +1,17 @@
 import os
-import copy
-import time
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
-import FrozenOrbits
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
-from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
-from FrozenOrbits.LPE import *
-from FrozenOrbits.utils import propagate_orbit
-from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
-from Scripts.BVP.initial_conditions import *
 
+import FrozenOrbits
+from FrozenOrbits.boundary_conditions import *
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel, polyhedralGravityModel
+from FrozenOrbits.LPE import *
+from FrozenOrbits.visualization import *
+from Scripts.BVP.initial_conditions import *
 
 
 def main():
@@ -67,7 +60,7 @@ def main():
         acc_diff_mag = np.linalg.norm(acc_diff, axis=1)
         
         plt.figure(1)
-        ax3 = plt.subplot(3,1,3)
+        plt.subplot(3,1,3)
         plt.plot(pinn_sol.t, acc_diff_mag, linewidth=1)
         plt.ylabel(r"$\delta a$ [m/s$^2$]", fontsize=8)
         plt.xlabel("Time [s]", fontsize=8)
@@ -116,8 +109,8 @@ def main():
         plt.gca().yaxis.set_major_locator(plt.MaxNLocator(4))
         plt.gca().zaxis.set_major_locator(plt.MaxNLocator(4))
 
-        Xf_pinn = df["Xf_pinn"][k][0:3]
-        Xf_poly = df["Xf_poly"][k][0:3]
+        df["Xf_pinn"][k][0:3]
+        df["Xf_poly"][k][0:3]
         dr = np.linalg.norm(df["Xf_pinn"][k][0:3] - df["Xf_poly"][k][0:3])
         dv = np.linalg.norm(df["Xf_pinn"][k][3:6] - df["Xf_poly"][k][3:6])
         
@@ -136,7 +129,7 @@ def main():
     # vis.save(plt.figure(3), os.path.basename(__file__).split('.py')[0] + '_da.pdf')
     vis.save(plt.figure(2), os.path.basename(__file__).split('.py')[0] + '_3d.pdf')
     print("\\hline")
-    print(f"Orbit & $\\delta r$ [m] & $\\delta v$ [m/s] & $a$ & $T_ Speedup \\\\")
+    print("Orbit & $\\delta r$ [m] & $\\delta v$ [m/s] & $a$ & $T_ Speedup \\\\")
     print("\\hline")
     for k in range(len(dr_list)):
         print(f"{color_list[k].capitalize()} & {dr_list[k]} & {dv_list[k]} & {semi_list[k]} & {T_200_list[k]} & {T_8_list[k]} & {T_PINN_list[k]} & {T_8_list[k]/T_PINN_list[k]} \\\\")

@@ -1,25 +1,19 @@
-from asyncio import gather
 import os
-import copy
-import time
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
-import FrozenOrbits
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
+from GravNN.CelestialBodies.Asteroids import Eros
+
+import FrozenOrbits
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
-
 
 
 def get_original_IC(df, k):
@@ -43,7 +37,7 @@ def get_integrated_orbit(T_0, X_0, model, orbit_multiplier=10):
     return orbit_sol
 
 def gather_integrated_orbits(df):
-    planet = Eros()
+    Eros()
     model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
         "/../Data/Dataframes/eros_BVP_PINN_III.data")  
     
@@ -90,7 +84,7 @@ def main():
     vis = VisualizationBase()
     vis.newFig()
     
-    range = plot_solution_histogram(sol_cart, color='orange', label='Cartesian Shooting Method', alpha=0.8)
+    plot_solution_histogram(sol_cart, color='orange', label='Cartesian Shooting Method', alpha=0.8)
     plot_solution_histogram(sol_OE, color='blue', label='OE Shooting Method', alpha=0.8)#, range=range)
     plt.xscale('log')
     plt.legend()

@@ -1,15 +1,13 @@
-from asyncio import gather
 import os
-from FrozenOrbits.bvp import *
-import FrozenOrbits
-import GravNN
+
 import matplotlib.pyplot as plt
 import numpy as np
-from FrozenOrbits.gravity_models import (pinnGravityModel)
-from FrozenOrbits.LPE import *
-from FrozenOrbits.visualization import *
 from GravNN.CelestialBodies.Asteroids import Eros
 
+import FrozenOrbits
+from FrozenOrbits.bvp import *
+from FrozenOrbits.LPE import *
+from FrozenOrbits.visualization import *
 
 vis = VisualizationBase()
 vis.fig_size = vis.tri_page
@@ -37,9 +35,9 @@ def dr_coordinates(df, **kwargs):
     dX_0_sol = np.array(df["dX_sol"])
 
     l_star = kwargs.get("l_star")
-    t_star = kwargs.get("t_star")
+    kwargs.get("t_star")
 
-    r_0 = np.linalg.norm(X_0[0:3])
+    np.linalg.norm(X_0[0:3])
     dr_0 = np.linalg.norm(dX_0[0:3])
     dr_0_sol = np.linalg.norm(dX_0_sol[0:3])
 
@@ -59,7 +57,7 @@ def dv_coordinates(df, **kwargs):
     l_star = kwargs.get("l_star")
     t_star = kwargs.get("t_star")
 
-    v_0 = np.linalg.norm(X_0[3:6])
+    np.linalg.norm(X_0[3:6])
     dv_0 = np.linalg.norm(dX_0[3:6])
     dv_0_sol = np.linalg.norm(dX_0_sol[3:6])
 
@@ -78,7 +76,7 @@ def dOE_coordinates(df, **kwargs):
     t_star = kwargs.get("t_star")
 
     planet = Eros()
-    OE_tilde_0 = df['OE_0'].reshape((-1,6))
+    df['OE_0'].reshape((-1,6))
     lpe = LPE_Traditional(None, planet.mu, 
                                 l_star=l_star, 
                                 t_star=t_star, 

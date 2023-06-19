@@ -1,22 +1,18 @@
 import os
-import copy
-import time
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
-import FrozenOrbits
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
+from GravNN.CelestialBodies.Asteroids import Eros
+
+import FrozenOrbits
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
 vis = VisualizationBase()
@@ -173,7 +169,6 @@ def plot_value_split_plot(x, y, **kwargs):
 
 def plot_OE_diff(experiment_name_list, cart_orbit_list, OE_orbit_list):
     base_figure_name = os.path.basename(__file__).split('.py')[0]
-    color_list = ['black', 'blue', 'red', 'green', 'purple']
     # vis.fig_size = (2.1, 1.8)
     # Make single OE figure
     vis.fig_size = (6.3, 2.1)
@@ -183,7 +178,6 @@ def plot_OE_diff(experiment_name_list, cart_orbit_list, OE_orbit_list):
     OE_original = OE_orbit_list[0]
     
     for k in range(len(OE_orbit_list)):
-        new_fig = True if k == 0 else False
     
         OE = OE_orbit_list[k]
         T = cart_orbit_list[k].t

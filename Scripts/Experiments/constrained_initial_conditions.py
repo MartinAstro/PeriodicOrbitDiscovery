@@ -1,23 +1,24 @@
 import os
-import copy
 import time
-import pandas as pd
-from FrozenOrbits.analysis import check_for_intersection, print_OE_differences, print_state_differences
-from FrozenOrbits.bvp import *
 
 import GravNN
-import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from GravNN.CelestialBodies.Asteroids import Eros
+
 import FrozenOrbits
+from FrozenOrbits.analysis import (
+    check_for_intersection,
+    print_OE_differences,
+    print_state_differences,
+)
 from FrozenOrbits.boundary_conditions import *
-from FrozenOrbits.gravity_models import (pinnGravityModel,
-                                         polyhedralGravityModel)
+from FrozenOrbits.bvp import *
+from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from GravNN.CelestialBodies.Asteroids import Eros
-import OrbitalElements.orbitalPlotting as op
-from FrozenOrbits.constraints import *
 from Scripts.BVP.initial_conditions import *
 
 np.random.seed(15)
@@ -67,7 +68,7 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
         init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
         bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1E-7) 
         
-        valid = check_for_intersection(bvp_sol, planet.obj_8k)
+        check_for_intersection(bvp_sol, planet.obj_8k)
         
         dX_0 = print_state_differences(init_sol)
         dX_sol = print_state_differences(bvp_sol)
@@ -87,7 +88,7 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
             "dX_0" : [dX_0], "dX_sol" : [dX_sol],     
             "lpe" : [lpe],  
             "elapsed_time" : [elapsed_time],
-            "result" : [results]
+            "result" : [results],
         }
         return data
 
@@ -109,10 +110,13 @@ def bounds_and_mask_fcn(experiment, OE_0):
         constraint_variable_mask = [True, True, True, True, True, True, False] 
         constraint_angle_wrap = [False, False, False, True, True, True, False] 
     else: 
-        # All OE are allowed to change (though soft bounds are placed on semi major and eccentricity to assure convergence)
+        # All OE are allowed to change (though soft bounds are placed on semi major 
+        # and eccentricity to assure convergence)
         bounds = ([0.1, 0.0001, -np.pi, -2*np.pi, -2*np.pi, -2*np.pi, 0.9],
                 [np.inf, 1.0, np.pi, 2*np.pi, 2*np.pi, 2*np.pi, 2.0])
-        decision_variable_mask = [True, True, True, True, True, True, True] # [OE, T] [N+1]
+        
+        # [OE, T] [N+1]
+        decision_variable_mask = [True, True, True, True, True, True, True] 
         constraint_variable_mask = [True, True, True, True, True, True, False] 
         constraint_angle_wrap = [False, False, False, True, True, True, False] 
 
@@ -143,7 +147,7 @@ def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
     init_sol = propagate_orbit(T_0, X_0, model, tol=1E-7) 
     bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1E-7) 
     
-    valid = check_for_intersection(bvp_sol, planet.obj_8k)
+    check_for_intersection(bvp_sol, planet.obj_8k)
     
     dX_0 = print_state_differences(init_sol)
     dX_sol = print_state_differences(bvp_sol)
@@ -163,7 +167,7 @@ def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
         "dX_0" : [dX_0], "dX_sol" : [dX_sol],       
         "lpe" : [lpe],  
         "elapsed_time" : [elapsed_time],
-        "result" : [results]
+        "result" : [results],
     }
     return data
 
@@ -180,7 +184,7 @@ def main():
             "X_0" : [], "X_0_sol" : [],
             "dOE_0" : [], "dOE_sol" : [],
             "dX_0" : [], "dX_sol" : [],     
-            "result" : []  
+            "result" : [],  
         })
 
     experiment_list = ['cartesian', 'OE', 'OE_constrained']
