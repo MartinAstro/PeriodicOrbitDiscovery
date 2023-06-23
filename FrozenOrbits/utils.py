@@ -42,8 +42,8 @@ def sample_safe_trad_OE(R_min, R_max):
                 np.random.uniform(0.0, 2 * np.pi),
                 np.random.uniform(0.0, 2 * np.pi),
                 np.random.uniform(0.0, 2 * np.pi),
-            ]
-        ]
+            ],
+        ],
     )
     return trad_OE
 

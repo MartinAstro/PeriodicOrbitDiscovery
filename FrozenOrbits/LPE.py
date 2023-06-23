@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 import numpy as np
 import tensorflow as tf
 
@@ -9,7 +11,7 @@ def element_dot(a, b):
     return tf.reshape(tf.reduce_sum(a * b, axis=1), ((-1, 1)))
 
 
-class LPE_Milankovitch:
+class LPE_Base:
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
         self.model = model
         self.G_tilde = 6.67408 * 10e-11  # m^3/(kg*s^2)
@@ -17,8 +19,88 @@ class LPE_Milankovitch:
         self.l_star = tf.constant(l_star, dtype=tf.float64, name="ref_length")
         self.m_star = tf.constant(m_star, dtype=tf.float64, name="ref_mass")
         self.t_star = tf.constant(t_star, dtype=tf.float64, name="ref_time")
-
         self.mu = self.mu_tilde * (self.t_star**2 / self.l_star**3)
+
+    def non_dimensionalize_time(self, T):
+        T_ND = T / self.t_star
+        return T_ND
+
+    def dimensionalize_time(self, T_ND):
+        T = T_ND * self.t_star
+        return T
+
+    def _conditional_compute_n(self, a):
+        n = tf.cond(
+            tf.greater_equal(a, 0),
+            lambda: tf.sqrt(self.mu / a**3),
+            lambda: tf.sqrt(-self.mu / a**3),
+        )
+        return n
+
+    def _compute_n(self, a):
+        n = tf.map_fn(fn=lambda a: self._conditional_compute_n(a), elems=(a))
+        return n
+
+    def compute_potential(self, x):
+        """
+        Very silly function, but it's the only way to compile dOE_dt_dx as a
+        tf.function(). In short, tf.function is unable to accept the model as an
+        argument without constant retracing according to:
+        https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        U_tilde = tf.cast(self.model.compute_potential(x), tf.float64)
+        return U_tilde[0]
+
+    def compute_R_potential(self, x):
+        """
+        Very silly function, but it's the only way to compile dOE_dt_dx as a
+        tf.function(). In short, tf.function is unable to accept the model as an
+        argument without constant retracing according to:
+        https://github.com/tensorflow/tensorflow/issues/38875
+        """
+        R = tf.cast(self.model.compute_disturbing_potential(x), tf.float64)
+        return R[0]
+
+    def dOE_dt(self, OE):
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(
+            OE_input,
+            dtype=tf.float64,
+            name="orbit_elements",
+        )
+        dOE_dt_results = self.dOE_dt_jit(OE_input_tf, self.mu)
+        return dOE_dt_results.numpy()
+
+    def dOE_dt_dx(self, OE):
+        OE_input = OE.reshape((1, -1)).astype(np.float64)
+        OE_input_tf = tf.Variable(
+            OE_input,
+            dtype=tf.float64,
+            name="orbit_elements",
+        )
+        dOE_dt_dx_results = self.dOE_dt_dx_jit(OE_input_tf, self.mu)
+        return dOE_dt_dx_results.numpy()
+
+    @abstractmethod
+    def non_dimensionalize_state(self, x0):
+        raise NotImplementedError
+
+    @abstractmethod
+    def dimensionalize_state(self, x0):
+        raise NotImplementedError
+
+    @abstractmethod
+    def dOE_dt_jit(self, OE, mu):
+        raise NotImplementedError
+
+    @abstractmethod
+    def dOE_dt_dx_jit(self, OE, mu):
+        raise NotImplementedError
+
+
+class LPE_Milankovitch(LPE_Base):
+    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+        super().__init__(model, mu, l_star, t_star, m_star)
         self.element_set = "milankovitch"
         self.num_elements = 7
 
@@ -36,62 +118,13 @@ class LPE_Milankovitch:
         )
         return mil_OE
 
-    def non_dimensionalize_time(self, T):
-        T_ND = T / self.t_star
-        return T_ND
-
-    def dimensionalize_time(self, T):
-        T = T * self.t_star
-        return T
-
-    def _conditional_compute_n(self, a):
-        n = tf.cond(
-            tf.greater_equal(a, 0),
-            lambda: tf.sqrt(self.mu / a**3),
-            lambda: tf.sqrt(-self.mu / a**3),
-        )
-        return n
-
-    def _compute_n(self, a):
-        n = tf.map_fn(fn=lambda a: self._conditional_compute_n(a), elems=(a))
-        return n
-
-    def dOE_dt(self, mil_OE):
-        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
-        mil_OE_input_tf = tf.Variable(
-            mil_OE_input,
-            dtype=tf.float64,
-            name="orbit_elements",
-        )
-        dOE_dt_results = self.dOE_milankovitch_dt(mil_OE_input_tf, self.mu)
-        return dOE_dt_results.numpy()
-
-    def dOE_dt_dx(self, mil_OE):
-        mil_OE_input = mil_OE.reshape((1, -1)).astype(np.float64)
-        mil_OE_input_tf = tf.Variable(
-            mil_OE_input,
-            dtype=tf.float64,
-            name="orbit_elements",
-        )
-        dOE_dt_dx_results = self.dOE_milankovitch_dt_dx(mil_OE_input_tf, self.mu)
-        return dOE_dt_dx_results.numpy()
-
-    def generate_potential(self, x):
-        """
-        Very silly function, but it's the only way to compile dOE_milankovitch_dt_dx as a tf.function().
-        In short, tf.function is unable to accept the model as an argument without constant retracing
-        according to: https://github.com/tensorflow/tensorflow/issues/38875
-        """
-        U_tilde = self.model.generate_potential_tf(x)
-        return U_tilde
-
     @tf.function(
         input_signature=[
             tf.TensorSpec(shape=(None, 7), dtype=tf.float64),
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_milankovitch_dt_dx(self, milankovitch_OE, mu):
+    def dOE_dt_dx_jit(self, milankovitch_OE, mu):
         print("Retracing")
         H = milankovitch_OE[:, 0:3]
         e = milankovitch_OE[:, 3:6]
@@ -103,7 +136,7 @@ class LPE_Milankovitch:
                 mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
                 cart_state = milankovitch2cart_tf(mil_OE_dim, mu)
                 r_tilde = cart_state[:, 0:3]
-                u_pred_tilde = -self.generate_potential(r_tilde)
+                u_pred_tilde = -self.compute_R_potential(r_tilde)
                 U = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
             dUdOE = tape.gradient(U, milankovitch_OE)
 
@@ -167,7 +200,7 @@ class LPE_Milankovitch:
             tf.TensorSpec(shape=None, dtype=tf.float64),
         ],
     )
-    def dOE_milankovitch_dt(self, milankovitch_OE, mu):
+    def dOE_dt_jit(self, milankovitch_OE, mu):
         H = milankovitch_OE[:, 0:3]
         e = milankovitch_OE[:, 3:6]
         L = milankovitch_OE[:, 6]
@@ -177,7 +210,7 @@ class LPE_Milankovitch:
             mil_OE_dim = self.dimensionalize_state(milankovitch_OE)
             cart_state = milankovitch2cart_tf(mil_OE_dim, self.mu_tilde)
             r_tilde = cart_state[:, 0:3]
-            u_pred_tilde = -self.generate_potential(r_tilde)
+            u_pred_tilde = -self.compute_R_potential(r_tilde)
             U = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
         dUdOE = tape.gradient(U, milankovitch_OE)
 
@@ -232,17 +265,12 @@ class LPE_Milankovitch:
         return dOE_dt[0]
 
 
-class LPE_Traditional:
+class LPE_Traditional(LPE_Base):
     "LPE with traditional OE, but normalized by length, time, and mass"
 
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0, theta_star=1.0):
-        self.model = model
-        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name="mu")
-        self.l_star = tf.constant(l_star, dtype=tf.float64, name="ref_length")
-        self.m_star = tf.constant(m_star, dtype=tf.float64, name="ref_mass")
-        self.t_star = tf.constant(t_star, dtype=tf.float64, name="ref_time")
+        super().__init__(model, mu, l_star, t_star, m_star)
         self.theta_star = tf.constant(theta_star, dtype=tf.float64, name="ref_angle")
-        self.mu = self.mu_tilde * (self.t_star**2 / self.l_star**3)
         self.element_set = "traditional"
         self.num_elements = 6
 
@@ -256,34 +284,6 @@ class LPE_Traditional:
         trad_OE = tf.concat([a_tilde, x0[:, 1:]], axis=1)
         return trad_OE
 
-    def non_dimensionalize_time(self, T):
-        T_ND = T / self.t_star
-        return T_ND
-
-    def dimensionalize_time(self, T_ND):
-        T = T_ND * self.t_star
-        return T
-
-    def dOE_dt(self, OE):
-        OE_input = OE.reshape((1, -1)).astype(np.float64)
-        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name="orbit_elements")
-        dOE_dt_results = self.dOE_trad_dt(OE_input_tf, self.mu)
-        return dOE_dt_results.numpy()[0]
-
-    def dOE_dt_dx(self, OE):
-        OE_input = OE.reshape((1, -1)).astype(np.float64)
-        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name="orbit_elements")
-        dOE_dt_dx_results = self.dOE_trad_dt_dx(OE_input_tf, self.mu)
-        return dOE_dt_dx_results.numpy()[0]
-
-    def generate_potential(self, x):
-        """
-        Very silly function, but it's the only way to compile dOE_dt_dx as a tf.function().
-        In short, tf.function is unable to accept the model as an argument without constant retracing
-        according to: https://github.com/tensorflow/tensorflow/issues/38875
-        """
-        return self.model.generate_potential_tf(x)
-
     def _conditional_compute_b(self, OE):
         a = OE[0]
         e = OE[1]
@@ -294,21 +294,9 @@ class LPE_Traditional:
         )
         return b
 
-    def _conditional_compute_n(self, a):
-        n = tf.cond(
-            tf.greater_equal(a, 0),
-            lambda: tf.sqrt(self.mu / a**3),
-            lambda: tf.sqrt(-self.mu / a**3),
-        )
-        return n
-
     def _compute_b(self, OE):
         b = tf.map_fn(fn=lambda OE: self._conditional_compute_b(OE), elems=OE)
         return b
-
-    def _compute_n(self, a):
-        n = tf.map_fn(fn=lambda a: self._conditional_compute_n(a), elems=(a))
-        return n
 
     @tf.function(
         input_signature=[
@@ -316,13 +304,13 @@ class LPE_Traditional:
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_trad_dt(self, OE, mu):
+    def dOE_dt_jit(self, OE, mu):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
             trad_OE_dim = self.dimensionalize_state(OE)
             cart_state = oe2cart_tf(trad_OE_dim, self.mu_tilde)
             r_tilde = cart_state[:, 0:3]
-            u_pred_tilde = -self.generate_potential(r_tilde)  # THIS MUST BE NEGATED
+            u_pred_tilde = -self.compute_R_potential(r_tilde)  # THIS MUST BE NEGATED
             u_pred = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
         dUdOE = tape.gradient(u_pred, OE)
 
@@ -367,7 +355,7 @@ class LPE_Traditional:
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_trad_dt_dx(self, OE, mu):
+    def dOE_dt_dx_jit(self, OE, mu):
         """For some reason, cannot use self.dOE_trad_dt() within this function, but instead the whole
         contents must be copied instead."""
         print("Retracing")
@@ -378,7 +366,7 @@ class LPE_Traditional:
                 trad_OE_dim = self.dimensionalize_state(OE)
                 cart_state = oe2cart_tf(trad_OE_dim, self.mu_tilde)
                 r_tilde = cart_state[:, 0:3]
-                u_pred_tilde = -self.generate_potential(r_tilde)
+                u_pred_tilde = -self.compute_R_potential(r_tilde)
                 u_pred = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
             dUdOE = tape_dt.gradient(u_pred, OE)
 
@@ -419,16 +407,11 @@ class LPE_Traditional:
         return dOE_dt_dx
 
 
-class LPE_Cartesian:
+class LPE_Cartesian(LPE_Base):
     "LPE with cartesian coordinates, but normalized by length, time, and mass"
 
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
-        self.model = model
-        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name="mu")
-        self.l_star = tf.constant(l_star, dtype=tf.float64, name="ref_length")
-        self.m_star = tf.constant(m_star, dtype=tf.float64, name="ref_mass")
-        self.t_star = tf.constant(t_star, dtype=tf.float64, name="ref_time")
-        self.mu = self.mu_tilde * (self.t_star**2 / self.l_star**3)
+        super().__init__(model, mu, l_star, t_star, m_star)
         self.element_set = "traditional"
         self.num_elements = 6
 
@@ -444,49 +427,20 @@ class LPE_Cartesian:
         cart = tf.concat([x, v], axis=1)
         return cart
 
-    def non_dimensionalize_time(self, T):
-        T_ND = T / self.t_star
-        return T_ND
-
-    def dimensionalize_time(self, T_ND):
-        T = T_ND * self.t_star
-        return T
-
-    def dOE_dt(self, OE):
-        OE_input = OE.reshape((1, -1)).astype(np.float64)
-        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name="orbit_elements")
-        dOE_dt_results = self.dOE_cart_dt(OE_input_tf, self.mu)
-        return dOE_dt_results.numpy()[0]
-
-    def dOE_dt_dx(self, OE):
-        OE_input = OE.reshape((1, -1)).astype(np.float64)
-        OE_input_tf = tf.Variable(OE_input, dtype=tf.float64, name="orbit_elements")
-        dOE_dt_dx_results = self.dOE_cart_dt_dx(OE_input_tf, self.mu)
-        return dOE_dt_dx_results.numpy()[0]
-
-    def generate_potential(self, x):
-        """
-        Very silly function, but it's the only way to compile dOE_dt_dx as a tf.function().
-        In short, tf.function is unable to accept the model as an argument without constant retracing
-        according to: https://github.com/tensorflow/tensorflow/issues/38875
-        """
-        return self.model.generate_potential_tf(x)
-
     @tf.function(
         input_signature=[
             tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_cart_dt(self, OE, mu):
+    def dOE_dt_jit(self, OE, mu):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
             trad_OE_dim = self.dimensionalize_state(OE)
             r_tilde = trad_OE_dim[:, 0:3]
-            u_0 = -self.mu_tilde / tf.linalg.norm(r_tilde, keepdims=True)
-            u_pred_tilde = u_0 + self.generate_potential(
-                r_tilde,
-            )  # THIS MUST BE NEGATED
+
+            # This assumes that self.compute_R_potential is the full potential
+            u_pred_tilde = self.compute_potential(r_tilde)
             u_pred = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
         a_tilde = -tape.gradient(u_pred, OE)
         v_tilde = OE[:, 3:6]
@@ -513,9 +467,9 @@ class LPE_Cartesian:
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_cart_dt_dx(self, OE, mu):
-        """For some reason, cannot use self.dOE_trad_dt() within this function, but instead the whole
-        contents must be copied instead."""
+    def dOE_dt_dx_jit(self, OE, mu):
+        """For some reason, cannot use self.dOE_trad_dt() within this function, but
+        instead the whole contents must be copied instead."""
         print("Retracing")
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
@@ -523,10 +477,7 @@ class LPE_Cartesian:
                 tape_dt.watch(OE)
                 trad_OE_dim = self.dimensionalize_state(OE)
                 r_tilde = trad_OE_dim[:, 0:3]
-                u_0 = -self.mu_tilde / tf.linalg.norm(r_tilde, keepdims=True)
-                u_pred_tilde = u_0 + self.generate_potential(
-                    r_tilde,
-                )  # THIS MUST BE NEGATED
+                u_pred_tilde = self.compute_potential(r_tilde)
                 u_pred = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
             a_tilde = -tape_dt.gradient(u_pred, OE)
             v_tilde = OE[:, 3:6]
@@ -549,16 +500,9 @@ class LPE_Cartesian:
         return dOE_dt_dx
 
 
-class LPE_Equinoctial:
+class LPE_Equinoctial(LPE_Base):
     def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
-        self.model = model
-        self.G_tilde = 6.67408 * 10e-11  # m^3/(kg*s^2)
-        self.mu_tilde = tf.constant(mu, dtype=tf.float64, name="mu")
-        self.l_star = tf.constant(l_star, dtype=tf.float64, name="ref_length")
-        self.m_star = tf.constant(m_star, dtype=tf.float64, name="ref_mass")
-        self.t_star = tf.constant(t_star, dtype=tf.float64, name="ref_time")
-
-        self.mu = self.mu_tilde * (self.t_star**2 / self.l_star**3)
+        super().__init__(model, mu, l_star, t_star, m_star)
         self.element_set = "equinoctial"
         self.num_elements = 6
 
@@ -572,62 +516,13 @@ class LPE_Equinoctial:
         equi_OE = tf.concat([p_dim, x0[:, 1:]], axis=1)
         return equi_OE
 
-    def non_dimensionalize_time(self, T):
-        T_ND = T / self.t_star
-        return T_ND
-
-    def dimensionalize_time(self, T):
-        T = T * self.t_star
-        return T
-
-    def _conditional_compute_n(self, a):
-        n = tf.cond(
-            tf.greater_equal(a, 0),
-            lambda: tf.sqrt(self.mu / a**3),
-            lambda: tf.sqrt(-self.mu / a**3),
-        )
-        return n
-
-    def _compute_n(self, a):
-        n = tf.map_fn(fn=lambda a: self._conditional_compute_n(a), elems=(a))
-        return n
-
-    def dOE_dt(self, equi_OE):
-        equi_OE_input = equi_OE.reshape((1, -1)).astype(np.float64)
-        equi_OE_input_tf = tf.Variable(
-            equi_OE_input,
-            dtype=tf.float64,
-            name="orbit_elements",
-        )
-        dOE_dt_results = self.dOE_equinoctial_dt(equi_OE_input_tf, self.mu)
-        return dOE_dt_results.numpy()
-
-    def dOE_dt_dx(self, equi_OE):
-        equi_OE_input = equi_OE.reshape((1, -1)).astype(np.float64)
-        equi_OE_input_tf = tf.Variable(
-            equi_OE_input,
-            dtype=tf.float64,
-            name="orbit_elements",
-        )
-        dOE_dt_dx_results = self.dOE_equinoctial_dt_dx(equi_OE_input_tf, self.mu)
-        return dOE_dt_dx_results.numpy()
-
-    def generate_potential(self, x):
-        """
-        Very silly function, but it's the only way to compile dOE_equinoctial_dt_dx as a tf.function().
-        In short, tf.function is unable to accept the model as an argument without constant retracing
-        according to: https://github.com/tensorflow/tensorflow/issues/38875
-        """
-        U_tilde = self.model.generate_potential_tf(x)
-        return U_tilde
-
     @tf.function(
         input_signature=[
             tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
             tf.TensorSpec(shape=(), dtype=tf.float64),
         ],
     )
-    def dOE_equinoctial_dt_dx(self, equinoctial_OE, mu):
+    def dOE_dt_dx_jit(self, equinoctial_OE, mu):
         print("Retracing")
 
         with tf.GradientTape(persistent=True) as tape_dx:
@@ -638,7 +533,7 @@ class LPE_Equinoctial:
                 trad_OE = equinoctial2oe_tf(equi_OE_dim, self.mu_tilde)
                 cart_state = oe2cart_tf(trad_OE, self.mu_tilde)
                 r_tilde = cart_state[:, 0:3]
-                u_pred_tilde = -self.generate_potential(r_tilde)
+                u_pred_tilde = -self.compute_R_potential(r_tilde)
                 U = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
             dUdOE = tape.gradient(U, equinoctial_OE)
 
@@ -717,14 +612,14 @@ class LPE_Equinoctial:
             tf.TensorSpec(shape=None, dtype=tf.float64),
         ],
     )
-    def dOE_equinoctial_dt(self, equinoctial_OE, mu):
+    def dOE_dt_jit(self, equinoctial_OE, mu):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(equinoctial_OE)
             equi_OE_dim = self.dimensionalize_state(equinoctial_OE)
             trad_OE = equinoctial2oe_tf(equi_OE_dim, self.mu_tilde)
             cart_state = oe2cart_tf(trad_OE, self.mu_tilde)
             r_tilde = cart_state[:, 0:3]
-            u_pred_tilde = -self.generate_potential(r_tilde)
+            u_pred_tilde = -self.compute_R_potential(r_tilde)
             U = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
         dUdOE = tape.gradient(U, equinoctial_OE)
 

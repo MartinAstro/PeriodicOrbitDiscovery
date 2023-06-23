@@ -37,7 +37,7 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
 
     model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data"
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
     )
 
     planet = model.config["planet"][0]
@@ -50,7 +50,7 @@ def main():
             "dt_poly": [],
             "Xf_pinn": [],
             "Xf_poly": [],
-        }
+        },
     )
 
     for k in range(5):
@@ -84,7 +84,7 @@ def main():
                     "Xf_pinn": [pinn_sol.y[:, -1]],
                     "Xf_poly": [poly_sol.y[:, -1]],
                     "semi": [OE_0[0, 0]],
-                }
+                },
             )
             .set_index("index")
         )

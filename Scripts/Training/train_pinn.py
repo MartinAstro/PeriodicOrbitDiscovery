@@ -16,29 +16,26 @@ def main():
 
     hparams = {
         "N_dist": [50000],
-        "N_train": [4500],
+        "N_train": [45000],
         "N_val": [5000],
-        "num_units": [20],
+        "num_units": [40],
         "loss_fcns": [["percent"]],
         "jit_compile": [True],
         "lr_anneal": [False],
         "eager": [False],
         "learning_rate": [0.001],
         "batch_size": [2**16],
-        "epochs": [5000],
+        "epochs": [10000],
         "preprocessing": [["pines", "r_inv"]],
         "PINN_constraint_fcn": ["pinn_a"],
         "gravity_data_fcn": [get_poly_data],
         "dropout": [0.0],
         "fuse_models": [False],
         "print_interval": [10],
-        "remove_point_mass": [True],
+        "remove_point_mass": [False],
     }
     args = configure_run_args(config, hparams)
     configs = [run(*args[0])]
-    # with mp.Pool(threads) as pool:
-    #     results = pool.starmap_async(run, args)
-    #     configs = results.get()
     save_training(df_file, configs)
 
 
