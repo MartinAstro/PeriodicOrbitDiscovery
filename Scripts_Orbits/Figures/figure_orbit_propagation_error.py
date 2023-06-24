@@ -11,7 +11,7 @@ from FrozenOrbits.constraints import *
 from FrozenOrbits.gravity_models import pinnGravityModel, polyhedralGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.visualization import *
-from Scripts.BVP.initial_conditions import *
+from Scripts_Orbits.BVP.initial_conditions import *
 
 
 def main():

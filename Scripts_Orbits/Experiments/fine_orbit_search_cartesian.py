@@ -4,8 +4,6 @@ import time
 import GravNN
 import numpy as np
 import pandas as pd
-
-# force tensorflow to run eagerly
 from GravNN.CelestialBodies.Asteroids import Eros
 
 import FrozenOrbits
@@ -14,45 +12,35 @@ from FrozenOrbits.analysis import (
     print_OE_differences,
     print_state_differences,
 )
+from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
 from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-
-# force tensorflow to execute eagerly
-# import tensorflow as tf
-# tf.config.run_functions_eagerly(True)
-
-# from Scripts.BVP.initial_conditions import *
-
-np.random.seed(15)
+from Scripts_Orbits.BVP.initial_conditions import *
 
 
-def sample_initial_conditions():
+def sample_initial_conditions(df, k):
     planet = Eros()
-    a = np.random.uniform(3 * planet.radius, 7 * planet.radius)
-    e = np.random.uniform(0.1, 0.3)
-    i = np.random.uniform(-np.pi, np.pi)
-    omega = np.random.uniform(0.0, 2 * np.pi)
-    Omega = np.random.uniform(0.0, 2 * np.pi)
-    M = np.random.uniform(0.0, 2 * np.pi)
-
-    trad_OE = np.array([[a, e, i, omega, Omega, M]])
-    X = trad2cart_tf(trad_OE, planet.mu).numpy()[0]
-    T = 2 * np.pi * np.sqrt(trad_OE[0, 0] ** 3 / planet.mu)
-    return trad_OE, X, T, planet
+    OE_0 = np.array([df.iloc[k]["OE_0_sol"]])
+    T_0 = df.iloc[k]["T_0_sol"]
+    X_0 = np.array(df.iloc[k]["X_0_sol"])
+    return OE_0, X_0, T_0, planet
 
 
 def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
+    np.random.seed(15)
 
     model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_BVP_PINN_III.data"
     )
 
-    planet = model.config["planet"][0]
+    directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
+    coarse_df = pd.read_pickle(directory + "cartesian_coarse_orbit_solutions.data")
+
     df = pd.DataFrame(
         {
             "T_0": [],
@@ -66,21 +54,20 @@ def main():
             "dX_0": [],
             "dX_sol": [],
             "result": [],
-        },
+        }
     )
 
     for k in range(10):
         print(f"Iteration {k}")
-        OE_0, X_0, T_0, planet = sample_initial_conditions()
+
+        OE_0, X_0, T_0, planet = sample_initial_conditions(coarse_df, k)
+        X_0_original = np.array(coarse_df.iloc[k]["X_0_sol"])
+
         scale = 100.0
-        l_star = np.linalg.norm(X_0[0:3]) / scale
-        t_star = np.linalg.norm(X_0[3:6]) * 10000 / l_star
+        l_star = np.linalg.norm(X_0_original[0:3]) / scale
+        t_star = np.linalg.norm(X_0_original[3:6]) * 10000 / l_star
         lpe = LPE_Cartesian(
-            model.gravity_model,
-            planet.mu,
-            l_star=l_star,
-            t_star=t_star,
-            m_star=1.0,
+            model.gravity_model, planet.mu, l_star=l_star, t_star=t_star, m_star=1.0
         )
         start_time = time.time()
 
@@ -89,8 +76,15 @@ def main():
             [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0.9 * T_0 / t_star],
             [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, 1.1 * T_0 / t_star],
         )
-        # [OE, T] [N+1]
-        decision_variable_mask = [True, True, True, True, True, True, True]
+        decision_variable_mask = [
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+            True,
+        ]  # [OE, T] [N+1]
         constraint_variable_mask = [True, True, True, True, True, True, False]
         constraint_angle_wrap = [False, False, False, False, False, False, False]
 
@@ -100,6 +94,8 @@ def main():
             constraint_variable_mask,
             constraint_angle_wrap,
             max_nfev=50,
+            atol=1e-6,
+            rtol=1e-6,
         )
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
@@ -118,16 +114,10 @@ def main():
         OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
 
         dOE_0, dOE_0_dimless = print_OE_differences(
-            OE_trad_init,
-            lpe,
-            "IVP",
-            constraint_angle_wrap,
+            OE_trad_init, lpe, "IVP", constraint_angle_wrap
         )
         dOE_sol, dOE_sol_dimless = print_OE_differences(
-            OE_trad_bvp,
-            lpe,
-            "BVP",
-            constraint_angle_wrap,
+            OE_trad_bvp, lpe, "BVP", constraint_angle_wrap
         )
 
         data = {
@@ -146,12 +136,13 @@ def main():
             "elapsed_time": [elapsed_time],
             "result": [results],
         }
-        df_k = pd.DataFrame().from_dict(data).set_index("index")
+
+        df_k = pd.DataFrame().from_dict(data)
         df = pd.concat([df, df_k], axis=0)
 
     directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
     os.makedirs(directory, exist_ok=True)
-    pd.to_pickle(df, directory + "cartesian_coarse_orbit_solutions.data")
+    pd.to_pickle(df, directory + "cartesian_fine_orbit_solutions.data")
 
 
 if __name__ == "__main__":

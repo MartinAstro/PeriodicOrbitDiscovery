@@ -87,7 +87,7 @@ def main():
                 2 * np.pi,
                 2 * np.pi,
                 2 * np.pi,
-                2.0,
+                1.1,
             ],
         )
         decision_variable_mask = [
@@ -107,6 +107,8 @@ def main():
             constraint_variable_mask,
             constraint_angle_wrap,
             max_nfev=50,
+            atol=1e-6,
+            rtol=1e-6,
         )
 
         OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)

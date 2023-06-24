@@ -13,7 +13,7 @@ from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from Scripts.BVP.initial_conditions import *
+from Scripts_Orbits.BVP.initial_conditions import *
 
 
 def get_original_IC(df, k):
@@ -21,26 +21,27 @@ def get_original_IC(df, k):
     X_0 = np.array(df.iloc[k]["X_0"])
     return T_0, X_0
 
+
 def get_corrected_IC(df, k):
     T_0 = df.iloc[k]["T_0_sol"]
     X_0 = np.array(df.iloc[k]["X_0_sol"])
     return T_0, X_0
 
+
 def get_integrated_orbit(T_0, X_0, model, orbit_multiplier=10):
-    t_eval = np.linspace(0, T_0*orbit_multiplier, int(100*orbit_multiplier))
+    t_eval = np.linspace(0, T_0 * orbit_multiplier, int(100 * orbit_multiplier))
     orbit_sol = propagate_orbit(
-        T_0*orbit_multiplier, 
-        X_0, 
-        model, 
-        tol=1E-7,
-        t_eval=t_eval) 
+        T_0 * orbit_multiplier, X_0, model, tol=1e-7, t_eval=t_eval
+    )
     return orbit_sol
+
 
 def gather_integrated_orbits(df):
     Eros()
-    model = pinnGravityModel(os.path.dirname(GravNN.__file__) + \
-        "/../Data/Dataframes/eros_BVP_PINN_III.data")  
-    
+    model = pinnGravityModel(
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_BVP_PINN_III.data"
+    )
+
     # Generate the raw data for plotting
     cart_orbit_list = []
     for k in range(len(df)):
@@ -49,12 +50,13 @@ def gather_integrated_orbits(df):
         cart_orbit_list.append(corrected_orbit_sol)
     return cart_orbit_list
 
+
 def plot_solution_histogram(cart_orbit_list, **kwargs):
     percent_error_list = []
     position_error_list = []
     for orbit in cart_orbit_list:
-        X_0 = orbit.y[:,0]
-        X_f = orbit.y[:,-1]
+        X_0 = orbit.y[:, 0]
+        X_f = orbit.y[:, -1]
         dX = X_f - X_0
         dX_percent = np.abs(dX / X_0) * 100
         dX_percent_mag = np.average(dX_percent)
@@ -62,19 +64,21 @@ def plot_solution_histogram(cart_orbit_list, **kwargs):
         position_error_list.append(np.linalg.norm(dX[0:3]))
 
     # range = kwargs.get('range', [0, np.max(percent_error_list)])
-    range = kwargs.get('range', [0, np.max(position_error_list)])
-    kwargs.update({"range" : range})
+    range = kwargs.get("range", [0, np.max(position_error_list)])
+    kwargs.update({"range": range})
     # range=None
     print(position_error_list)
-    plt.hist(position_error_list,
-             bins=np.logspace(np.log10(1),np.log10(10**6), 50),
-            #  range=[np.log10(1E-2), np.log10(5E2)],
-             **kwargs)
+    plt.hist(
+        position_error_list,
+        bins=np.logspace(np.log10(1), np.log10(10**6), 50),
+        #  range=[np.log10(1E-2), np.log10(5E2)],
+        **kwargs,
+    )
     return range
 
-def main():
 
-    directory =  os.path.dirname(FrozenOrbits.__file__)+ "/Data/"
+def main():
+    directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
     fine_df = pd.read_pickle(directory + "fine_orbit_solutions.data")
     cart_fine_df = pd.read_pickle(directory + "cartesian_fine_orbit_solutions.data")
 
@@ -83,17 +87,21 @@ def main():
 
     vis = VisualizationBase()
     vis.newFig()
-    
-    plot_solution_histogram(sol_cart, color='orange', label='Cartesian Shooting Method', alpha=0.8)
-    plot_solution_histogram(sol_OE, color='blue', label='OE Shooting Method', alpha=0.8)#, range=range)
-    plt.xscale('log')
+
+    plot_solution_histogram(
+        sol_cart, color="orange", label="Cartesian Shooting Method", alpha=0.8
+    )
+    plot_solution_histogram(
+        sol_OE, color="blue", label="OE Shooting Method", alpha=0.8
+    )  # , range=range)
+    plt.xscale("log")
     plt.legend()
     plt.xlabel("Cartesian State Error after 10 Orbits [m]")
     plt.ylabel("\# of Solutions")
-    base_figure_name = os.path.basename(__file__).split('.py')[0]
+    base_figure_name = os.path.basename(__file__).split(".py")[0]
     vis.save(plt.gcf(), f"{base_figure_name}.pdf")
     plt.show()
-    
+
 
 if __name__ == "__main__":
     main()

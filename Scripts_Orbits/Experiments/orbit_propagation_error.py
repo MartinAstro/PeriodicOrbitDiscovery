@@ -13,7 +13,7 @@ from FrozenOrbits.gravity_models import pinnGravityModel, polyhedralGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
-from Scripts.BVP.initial_conditions import *
+from Scripts_Orbits.BVP.initial_conditions import *
 
 np.random.seed(15)
 
