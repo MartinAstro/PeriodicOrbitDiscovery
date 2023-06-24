@@ -83,6 +83,12 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False):
     )
 
     if show:
+        plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k)
+        plt.title("Initial Guess")
+
+        plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
+        plt.title("BVP Solution")
+
         plot_OE_1d(init_sol.t, OE_trad_init, "traditional", y0_hline=True)
         plot_OE_1d(bvp_sol.t, OE_trad_bvp, "traditional", y0_hline=True)
         plt.show()
