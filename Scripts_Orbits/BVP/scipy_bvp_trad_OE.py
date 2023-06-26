@@ -18,13 +18,12 @@ from Scripts_Orbits.BVP.initial_conditions import *
 np.random.seed(15)
 
 
-def bvp_trad_OE(OE_0, X_0, T_0, planet, model, show=False):
+def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
-    scale = 1.0
     lpe = LPE_Traditional(
         model.gravity_model,
         planet.mu,
-        l_star=OE_0[0, 0] / scale,
+        l_star=OE_0[0, 0],
         t_star=T_0,
         m_star=1.0,
         theta_star=2 * np.pi,
@@ -34,8 +33,8 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, show=False):
 
     # Shooting solvers
     bounds = (
-        [0.7 * scale, 0.1, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
-        [1.0 * scale, 0.5, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
+        [0.7, 0.1, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
+        [1.0, 0.5, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
     )
     decision_variable_mask = [True, True, True, True, True, True, True]  # [OE, T] [N+1]
     constraint_variable_mask = [
@@ -61,18 +60,18 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, show=False):
         decision_variable_mask,
         constraint_variable_mask,
         constraint_angle_wrap,
-        rtol=1e-6,
-        atol=1e-6,
+        rtol=tol,
+        atol=tol,
     )  # Finds a local optimum, step size gets too small
 
     OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
     elapsed_time = time.time() - start_time
 
     # propagate the initial and solution orbits
-    init_sol = propagate_orbit(T_0, X_0, model, tol=1e-7)
-    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1e-7)
+    init_sol = propagate_orbit(T_0, X_0, model, tol=tol)
+    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=tol)
 
-    check_for_intersection(bvp_sol, planet.obj_8k)
+    valid = check_for_intersection(bvp_sol, planet.obj_8k)
 
     dX_0 = print_state_differences(init_sol)
     dX_sol = print_state_differences(bvp_sol)
@@ -83,8 +82,8 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, show=False):
     plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
     plt.title("BVP Solution")
 
-    OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
-    OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
+    OE_trad_init = OE_0
+    OE_trad_bvp = OE_0_sol
 
     dOE_0, dOE_0_dimless = print_OE_differences(
         OE_trad_init,
@@ -128,6 +127,7 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, show=False):
         "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
+        "valid": [valid],
     }
 
     return data

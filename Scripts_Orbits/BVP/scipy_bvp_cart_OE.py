@@ -19,7 +19,7 @@ from Scripts_Orbits.BVP.initial_conditions import *
 np.random.seed(15)
 
 
-def bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False):
+def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
 
     l_star = np.linalg.norm(X_0[0:3])
@@ -50,22 +50,23 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False):
         constraint_variable_mask,
         constraint_angle_wrap,
         max_nfev=50,
-        atol=1e-6,
-        rtol=1e-6,
+        atol=tol,
+        rtol=tol,
     )
 
     OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
     elapsed_time = time.time() - start_time
 
     # propagate the initial and solution orbits
-    init_sol = propagate_orbit(T_0, X_0, model, tol=1e-7)
-    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1e-7)
+    init_sol = propagate_orbit(T_0, X_0, model, tol=tol)
+    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=tol)
 
-    check_for_intersection(bvp_sol, planet.obj_8k)
+    valid = check_for_intersection(bvp_sol, planet.obj_8k)
 
     dX_0 = print_state_differences(init_sol)
     dX_sol = print_state_differences(bvp_sol)
 
+    # convert solution to traditional orbital elements
     OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
     OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
 
@@ -81,17 +82,6 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False):
         "BVP",
         constraint_angle_wrap,
     )
-
-    if show:
-        plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k)
-        plt.title("Initial Guess")
-
-        plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
-        plt.title("BVP Solution")
-
-        plot_OE_1d(init_sol.t, OE_trad_init, "traditional", y0_hline=True)
-        plot_OE_1d(bvp_sol.t, OE_trad_bvp, "traditional", y0_hline=True)
-        plt.show()
 
     print(f"Time Elapsed: {time.time()-start_time}")
     print(f"Initial OE: {OE_0} \t T: {T_0}")
@@ -111,7 +101,19 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False):
         "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
+        "valid": [valid],
     }
+
+    if show:
+        plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k)
+        plt.title("Initial Guess")
+
+        plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
+        plt.title("BVP Solution")
+
+        plot_OE_1d(init_sol.t, OE_trad_init, "traditional", y0_hline=True)
+        plot_OE_1d(bvp_sol.t, OE_trad_bvp, "traditional", y0_hline=True)
+        plt.show()
 
     return data
 

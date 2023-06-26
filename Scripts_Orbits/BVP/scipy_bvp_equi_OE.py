@@ -7,7 +7,6 @@ from FrozenOrbits.analysis import (
     print_OE_differences,
     print_state_differences,
 )
-from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
 from FrozenOrbits.LPE import *
@@ -17,12 +16,11 @@ from FrozenOrbits.visualization import *
 np.random.seed(15)
 
 
-def bvp_equi_OE(OE_0, X_0, T_0, planet, model, show=False):
+def bvp_equi_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     # tf.config.run_functions_eagerly(True)
 
     OE_0 = oe2equinoctial_tf(OE_0, planet.mu).numpy()
-    # OE_0 = oe2milankovitch_tf(OE_0, planet.mu).numpy()
 
     # Desire |H_0| = 1
     # Acknowledging H = (t_star/l_star**2)*H_tilde
@@ -32,7 +30,7 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, show=False):
         model.gravity_model,
         planet.mu,
         l_star=OE_0[0, 0],  # H = t/l**2 * H_tilde
-        t_star=T,
+        t_star=T_0,
         m_star=1.0,
     )
 
@@ -61,24 +59,24 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, show=False):
         constraint_variable_mask,
         constraint_angle_wrap_mask,
         max_nfev=50,
-        atol=1e-6,
-        rtol=1e-6,
+        atol=tol,
+        rtol=tol,
     )
 
     OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
     elapsed_time = time.time() - start_time
 
     # propagate the initial and solution orbits
-    init_sol = propagate_orbit(T_0, X_0, model, tol=1e-7)
-    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=1e-7)
+    init_sol = propagate_orbit(T_0, X_0, model, tol=tol)
+    bvp_sol = propagate_orbit(T_0_sol, X_0_sol, model, tol=tol)
 
-    check_for_intersection(bvp_sol, planet.obj_8k)
+    valid = check_for_intersection(bvp_sol, planet.obj_8k)
 
     dX_0 = print_state_differences(init_sol)
     dX_sol = print_state_differences(bvp_sol)
 
-    OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
-    OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
+    OE_trad_init = OE_0
+    OE_trad_bvp = OE_0_sol
 
     dOE_0, dOE_0_dimless = print_OE_differences(
         OE_trad_init,
@@ -122,6 +120,7 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, show=False):
         "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
+        "valid": [valid],
     }
 
     return data
