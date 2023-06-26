@@ -27,8 +27,9 @@ def main(type):
     )
 
     # gather all of the data files in the directory using glob
-    directory = os.path.dirname(FrozenOrbits.__file__) + f"/Data/MC/*{type}"
-    data_files = glob.glob(directory + "*.data")
+    directory = os.path.dirname(FrozenOrbits.__file__) + f"/../Data/MC/"
+    data_files = glob.glob(directory + f"*{type}*.data")
+    print(data_files)
 
     # iterate through each file and append it to the dataframe
     for file in data_files:
@@ -40,7 +41,7 @@ def main(type):
 
 
 if __name__ == "__main__":
-    main("trad")
-    main("equi")
-    main("mil")
+    # main("trad")
+    # main("equi")
+    # main("mil")
     main("cart")

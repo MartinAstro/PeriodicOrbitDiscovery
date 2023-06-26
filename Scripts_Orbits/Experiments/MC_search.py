@@ -56,12 +56,12 @@ def main():
     index = int(sys.argv[2])
     solver = solvers.get(solver_key, None)
 
-    directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
+    directory = os.path.dirname(FrozenOrbits.__file__) + "/../Data/"
 
     print(f"Iteration {index}")
     OE_0, X_0, T_0, planet = sample_initial_conditions(index)
-    data = solver(OE_0, X_0, T_0, planet, model, show=False)
-    data["index"] = index
+    data = solver(OE_0, X_0, T_0, planet, model, tol=1e-7, show=False)
+    data["index"] = [index]
     data["solver_key"] = [solver_key]
 
     # save data to pickle

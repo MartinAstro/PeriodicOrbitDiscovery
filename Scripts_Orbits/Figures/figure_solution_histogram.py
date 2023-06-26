@@ -26,20 +26,24 @@ def plot_solution_histogram(error, **kwargs):
 
 def main():
     directory = os.path.dirname(FrozenOrbits.__file__)
-    df = pd.read_pickle(directory + "/Data/orbit_solutions.data")
+    df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_cart.data")
 
     # compute percent error between initial and final state
-    def compute_percent_error(key):
-        X_0 = df[key].y[:, 0]
-        X_f = df[key].y[:, -1]
-        dX = X_f - X_0
+    def compute_percent_error(row, key_prefix):
+        if key_prefix == "OE":
+            dX = row['dOE_sol']
+            X_0 = row['OE_0_sol']
+        else:
+            dX = row['dX_sol']
+            X_0 = row['X_0_sol']
+
         dX_percent = np.abs(dX / X_0) * 100
         dX_percent_mag = np.average(dX_percent)
         return dX_percent_mag
 
     # Save into the dataframe
-    df["OE_percent"] = df.apply(lambda: compute_percent_error("OE_sol"), axis=1)
-    df["X_percent"] = df.apply(lambda: compute_percent_error("X_sol"), axis=1)
+    df["OE_percent"] = df.apply(lambda row: compute_percent_error(row, "OE"), axis=1)
+    df["X_percent"] = df.apply(lambda row: compute_percent_error(row, "X"), axis=1)
 
     # filter the data based on the solver_key
     cart_df = df[df["solver_key"] == "cart"]
@@ -56,29 +60,30 @@ def main():
         label="Cartesian Shooting Method",
         alpha=0.8,
     )
-    plot_solution_histogram(
-        trad_df["OE_percent"],
-        color="blue",
-        label="Traditional OE Shooting Method",
-        alpha=0.8,
-    )
-    plot_solution_histogram(
-        mil_df["OE_percent"],
-        color="red",
-        label="Milankovitch OE Shooting Method",
-        alpha=0.8,
-    )
-    plot_solution_histogram(
-        equi_df["OE_percent"],
-        color="red",
-        label="Equinoctial OE Shooting Method",
-        alpha=0.8,
-    )
+    # plot_solution_histogram(
+    #     trad_df["OE_percent"],
+    #     color="blue",
+    #     label="Traditional OE Shooting Method",
+    #     alpha=0.8,
+    # )
+    # plot_solution_histogram(
+    #     mil_df["OE_percent"],
+    #     color="red",
+    #     label="Milankovitch OE Shooting Method",
+    #     alpha=0.8,
+    # )
+    # plot_solution_histogram(
+    #     equi_df["OE_percent"],
+    #     color="red",
+    #     label="Equinoctial OE Shooting Method",
+    #     alpha=0.8,
+    # )
     plt.xscale("log")
     plt.legend()
     plt.xlabel("Cartesian State Error after 10 Orbits [m]")
     plt.ylabel("\# of Solutions")
-    vis.save(plt.gcf(), directory + "/Plots/error_histogram.pdf")
+    os.makedirs(directory + "/../Plots/")
+    vis.save(plt.gcf(), directory + "/../Plots/error_histogram.pdf")
     plt.show()
 
 
