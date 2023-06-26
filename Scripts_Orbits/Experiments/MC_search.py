@@ -19,15 +19,15 @@ from Scripts_Orbits.BVP.scipy_bvp_mil_OE import bvp_mil_OE
 from Scripts_Orbits.BVP.scipy_bvp_trad_OE import bvp_trad_OE
 
 
-def sample_initial_conditions():
+def sample_initial_conditions(idx):
     planet = Eros()
-    a = np.random.uniform(3 * planet.radius, 7 * planet.radius)
-    e = np.random.uniform(0.1, 0.3)
-    i = np.random.uniform(-np.pi, np.pi)
-    omega = np.random.uniform(0.0, 2 * np.pi)
-    Omega = np.random.uniform(0.0, 2 * np.pi)
-    M = np.random.uniform(0.0, 2 * np.pi)
-
+    for _ in range(idx):
+        a = np.random.uniform(3 * planet.radius, 7 * planet.radius)
+        e = np.random.uniform(0.1, 0.3)
+        i = np.random.uniform(-np.pi, np.pi)
+        omega = np.random.uniform(0.0, 2 * np.pi)
+        Omega = np.random.uniform(0.0, 2 * np.pi)
+        M = np.random.uniform(0.0, 2 * np.pi)
     trad_OE = np.array([[a, e, i, omega, Omega, M]])
     X = trad2cart_tf(trad_OE, planet.mu).numpy()[0]
     T = 2 * np.pi * np.sqrt(trad_OE[0, 0] ** 3 / planet.mu)
@@ -59,7 +59,7 @@ def main():
     directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
 
     print(f"Iteration {index}")
-    OE_0, X_0, T_0, planet = sample_initial_conditions()
+    OE_0, X_0, T_0, planet = sample_initial_conditions(index)
     data = solver(OE_0, X_0, T_0, planet, model, show=False)
     data["index"] = index
     data["solver_key"] = [solver_key]
