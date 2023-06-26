@@ -106,7 +106,7 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
         "dOE_sol": [dOE_sol],
         "dX_0": [dX_0],
         "dX_sol": [dX_sol],
-        "lpe": [lpe],
+        # "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
         "valid": [valid],
