@@ -6,7 +6,7 @@ import pandas as pd
 import FrozenOrbits
 
 
-def main():
+def main(type):
     df = pd.DataFrame(
         {
             "T_0": [],
@@ -27,7 +27,7 @@ def main():
     )
 
     # gather all of the data files in the directory using glob
-    directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/MC/"
+    directory = os.path.dirname(FrozenOrbits.__file__) + f"/Data/MC/*{type}"
     data_files = glob.glob(directory + "*.data")
 
     # iterate through each file and append it to the dataframe
@@ -36,8 +36,11 @@ def main():
         df_k = pd.DataFrame().from_dict(data).set_index("index")
         df = pd.concat([df, df_k], axis=0)
 
-    pd.to_pickle(df, directory + "orbit_solutions.data")
+    pd.to_pickle(df, directory + f"orbit_solutions_{type}.data")
 
 
 if __name__ == "__main__":
-    main()
+    main("trad")
+    main("equi")
+    main("mil")
+    main("cart")

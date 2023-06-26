@@ -70,18 +70,9 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
     OE_trad_bvp = cart2trad_tf(bvp_sol.y.T, planet.mu).numpy()
 
-    dOE_0, dOE_0_dimless = print_OE_differences(
-        OE_trad_init,
-        lpe,
-        "IVP",
-        constraint_angle_wrap,
-    )
-    dOE_sol, dOE_sol_dimless = print_OE_differences(
-        OE_trad_bvp,
-        lpe,
-        "BVP",
-        constraint_angle_wrap,
-    )
+    angle_wrap = constraint_angle_wrap
+    dOE_0, dOE_0_dimless = print_OE_differences(OE_trad_init, lpe, "IVP", angle_wrap)
+    dOE_sol, dOE_sol_dimless = print_OE_differences(OE_trad_bvp, lpe, "BVP", angle_wrap)
 
     print(f"Time Elapsed: {time.time()-start_time}")
     print(f"Initial OE: {OE_0} \t T: {T_0}")

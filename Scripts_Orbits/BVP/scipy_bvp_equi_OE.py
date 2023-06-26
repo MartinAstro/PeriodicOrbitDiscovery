@@ -75,21 +75,9 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     dX_0 = print_state_differences(init_sol)
     dX_sol = print_state_differences(bvp_sol)
 
-    OE_trad_init = OE_0
-    OE_trad_bvp = OE_0_sol
-
-    dOE_0, dOE_0_dimless = print_OE_differences(
-        OE_trad_init,
-        lpe,
-        "IVP",
-        constraint_angle_wrap_mask,
-    )
-    dOE_sol, dOE_sol_dimless = print_OE_differences(
-        OE_trad_bvp,
-        lpe,
-        "BVP",
-        constraint_angle_wrap_mask,
-    )
+    angle_wrap = constraint_angle_wrap_mask
+    dOE_0, dOE_0_dimless = print_OE_differences(OE_0, lpe, "IVP", angle_wrap)
+    dOE_sol, dOE_sol_dimless = print_OE_differences(OE_0_sol, lpe, "BVP", angle_wrap)
 
     if show:
         plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k)
@@ -98,8 +86,8 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
         plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
         plt.title("BVP Solution")
 
-        plot_OE_1d(init_sol.t, OE_trad_init, "equinoctal", y0_hline=True)
-        plot_OE_1d(bvp_sol.t, OE_trad_bvp, "equinoctal", y0_hline=True)
+        plot_OE_1d(init_sol.t, OE_0, "equinoctal", y0_hline=True)
+        plot_OE_1d(bvp_sol.t, OE_0_sol, "equinoctal", y0_hline=True)
         plt.show()
 
     print(f"Time Elapsed: {time.time()-start_time}")
