@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from GravNN.CelestialBodies.Asteroids import Eros
-from initial_conditions import *
 
 from FrozenOrbits.analysis import (
     check_for_intersection,
@@ -13,6 +12,7 @@ from FrozenOrbits.constraints import *
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
+from Scripts_Orbits.BVP.initial_conditions import *
 
 np.random.seed(15)
 
