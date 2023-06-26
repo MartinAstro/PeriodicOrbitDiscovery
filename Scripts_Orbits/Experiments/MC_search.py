@@ -1,8 +1,9 @@
 import os
+import pickle
+import sys
 
 import GravNN
 import numpy as np
-import pandas as pd
 from GravNN.CelestialBodies.Asteroids import Eros
 
 import FrozenOrbits
@@ -13,6 +14,9 @@ from FrozenOrbits.LPE import *
 from FrozenOrbits.visualization import *
 from Scripts_Orbits.BVP.initial_conditions import *
 from Scripts_Orbits.BVP.scipy_bvp_cart_OE import bvp_cart_OE
+from Scripts_Orbits.BVP.scipy_bvp_equi_OE import bvp_equi_OE
+from Scripts_Orbits.BVP.scipy_bvp_mil_OE import bvp_mil_OE
+from Scripts_Orbits.BVP.scipy_bvp_trad_OE import bvp_trad_OE
 
 
 def sample_initial_conditions():
@@ -38,34 +42,32 @@ def main():
         os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
     )
 
+    solvers = {
+        "trad": bvp_trad_OE,
+        "equi": bvp_equi_OE,
+        "mil": bvp_mil_OE,
+        "cart": bvp_cart_OE,
+    }
+
+    # replace command line arguments for debugging
+    # sys.argv = ["", "trad", "0"]
+
+    solver_key = sys.argv[1]
+    index = int(sys.argv[2])
+    solver = solvers.get(solver_key, None)
+
     directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
 
-    df = pd.DataFrame(
-        {
-            "T_0": [],
-            "T_0_sol": [],
-            "OE_0": [],
-            "OE_0_sol": [],
-            "X_0": [],
-            "X_0_sol": [],
-            "dOE_0": [],
-            "dOE_sol": [],
-            "dX_0": [],
-            "dX_sol": [],
-            "result": [],
-        },
-    )
+    print(f"Iteration {index}")
+    OE_0, X_0, T_0, planet = sample_initial_conditions()
+    data = solver(OE_0, X_0, T_0, planet, model, show=False)
+    data["index"] = index
+    data["solver_key"] = [solver_key]
 
-    for k in range(10):
-        print(f"Iteration {k}")
-        OE_0, X_0, T_0, planet = sample_initial_conditions()
-        data = bvp_cart_OE(OE_0, X_0, T_0, planet, model, show=False)
-        data["index"] = k
-
-        df_k = pd.DataFrame().from_dict(data).set_index("index")
-        df = pd.concat([df, df_k], axis=0)
-
-    pd.to_pickle(df, directory + "cartesian_fine_orbit_solutions.data")
+    # save data to pickle
+    os.makedirs(directory + "MC/", exist_ok=True)
+    with open(directory + f"MC/orbit_solutions_{solver_key}_{index}.data", "wb") as f:
+        pickle.dump(data, f)
 
 
 if __name__ == "__main__":
