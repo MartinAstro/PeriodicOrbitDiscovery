@@ -132,12 +132,7 @@ class LPE_Milankovitch(LPE_Base):
         )
         return mil_OE
 
-    @tf.function(
-        # input_signature=[
-        #     tf.TensorSpec(shape=(None, 7), dtype=tf.float64),
-        #     tf.TensorSpec(shape=(None,), dtype=tf.float64),
-        # ],
-    )
+    @tf.function()
     def dOE_dt_jit(self, milankovitch_OE):
         H = milankovitch_OE[:, 0:3]
         e = milankovitch_OE[:, 3:6]
@@ -309,12 +304,7 @@ class LPE_Cartesian(LPE_Base):
         cart = tf.concat([x, v], axis=1)
         return cart
 
-    @tf.function(
-        input_signature=[
-            tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
-            tf.TensorSpec(shape=(None,), dtype=tf.float64),
-        ],
-    )
+    @tf.function()
     def dOE_dt_jit(self, OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
@@ -360,12 +350,7 @@ class LPE_Equinoctial(LPE_Base):
         equi_OE = tf.concat([p_dim, x0[:, 1:]], axis=1)
         return equi_OE
 
-    @tf.function(
-        # input_signature=[
-        #     tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
-        #     tf.TensorSpec(shape=(None,), dtype=tf.float64),
-        # ],
-    )
+    @tf.function()
     def dOE_dt_jit(self, equinoctial_OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(equinoctial_OE)
