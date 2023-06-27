@@ -12,13 +12,22 @@ def element_dot(a, b):
 
 
 class LPE_Base:
-    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+    def __init__(
+        self,
+        model,
+        mu,
+        l_star=1.0,
+        t_star=1.0,
+        m_star=1.0,
+        theta_star=2.0 * np.pi,
+    ):
         self.model = model
         self.G_tilde = 6.67408 * 10e-11  # m^3/(kg*s^2)
         self.mu_tilde = tf.constant(mu, dtype=tf.float64, name="mu")
         self.l_star = tf.constant(l_star, dtype=tf.float64, name="ref_length")
         self.m_star = tf.constant(m_star, dtype=tf.float64, name="ref_mass")
         self.t_star = tf.constant(t_star, dtype=tf.float64, name="ref_time")
+        self.theta_star = tf.constant(theta_star, dtype=tf.float64, name="ref_angle")
         self.mu = self.mu_tilde * (self.t_star**2 / self.l_star**3)
 
     def non_dimensionalize_time(self, T):
@@ -56,10 +65,10 @@ class LPE_Base:
         return R[0]
 
     @tf.function()
-    def dOE_dt_dx_jit(self, OE, mu):
+    def dOE_dt_dx_jit(self, OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
-            dOE_dt = self.dOE_dt_jit(OE, mu)
+            dOE_dt = self.dOE_dt_jit(OE)
         dOE_dt_dx = tape.batch_jacobian(dOE_dt, OE, experimental_use_pfor=False)
         return dOE_dt_dx
 
@@ -70,7 +79,7 @@ class LPE_Base:
             dtype=tf.float64,
             name="orbit_elements",
         )
-        dOE_dt_results = self.dOE_dt_jit(OE_input_tf, self.mu)
+        dOE_dt_results = self.dOE_dt_jit(OE_input_tf)
         return dOE_dt_results.numpy()
 
     def dOE_dt_dx(self, OE):
@@ -80,7 +89,7 @@ class LPE_Base:
             dtype=tf.float64,
             name="orbit_elements",
         )
-        dOE_dt_dx_results = self.dOE_dt_dx_jit(OE_input_tf, self.mu)
+        dOE_dt_dx_results = self.dOE_dt_dx_jit(OE_input_tf)
         return dOE_dt_dx_results.numpy()
 
     @abstractmethod
@@ -92,12 +101,19 @@ class LPE_Base:
         raise NotImplementedError
 
     @abstractmethod
-    def dOE_dt_jit(self, OE, mu):
+    def dOE_dt_jit(self, OE):
         raise NotImplementedError
 
 
 class LPE_Milankovitch(LPE_Base):
-    def __init__(self, model, mu, l_star=1.0, t_star=1.0, m_star=1.0):
+    def __init__(
+        self,
+        model,
+        mu,
+        l_star=1.0,
+        t_star=1.0,
+        m_star=1.0,
+    ):
         super().__init__(model, mu, l_star, t_star, m_star)
         self.element_set = "milankovitch"
         self.num_elements = 7
@@ -117,12 +133,12 @@ class LPE_Milankovitch(LPE_Base):
         return mil_OE
 
     @tf.function(
-        input_signature=[
-            tf.TensorSpec(shape=(None, 7), dtype=tf.float64),
-            tf.TensorSpec(shape=None, dtype=tf.float64),
-        ],
+        # input_signature=[
+        #     tf.TensorSpec(shape=(None, 7), dtype=tf.float64),
+        #     tf.TensorSpec(shape=(None,), dtype=tf.float64),
+        # ],
     )
-    def dOE_dt_jit(self, milankovitch_OE, mu):
+    def dOE_dt_jit(self, milankovitch_OE):
         H = milankovitch_OE[:, 0:3]
         e = milankovitch_OE[:, 3:6]
         L = milankovitch_OE[:, 6]
@@ -136,6 +152,7 @@ class LPE_Milankovitch(LPE_Base):
             U = (self.t_star / self.l_star) ** 2 * self.m_star * u_pred_tilde
         dUdOE = tape.gradient(U, milankovitch_OE)
 
+        mu = self.mu
         p = element_dot(H, H) / mu  # TODO: non-dimensionalize mu
         e_squared = element_dot(e, e)
         denominator = tf.cond(
@@ -184,7 +201,7 @@ class LPE_Milankovitch(LPE_Base):
 
         dOE_dt = tf.concat([H_dt, e_dt, L_dt], axis=1)
 
-        return dOE_dt[0]
+        return dOE_dt
 
 
 class LPE_Traditional(LPE_Base):
@@ -221,12 +238,12 @@ class LPE_Traditional(LPE_Base):
         return b
 
     @tf.function(
-        input_signature=[
-            tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
-            tf.TensorSpec(shape=(), dtype=tf.float64),
-        ],
+        # input_signature=[
+        #     tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
+        #     tf.TensorSpec(shape=(None,), dtype=tf.float64),
+        # ],
     )
-    def dOE_dt_jit(self, OE, mu):
+    def dOE_dt_jit(self, OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
             trad_OE_dim = self.dimensionalize_state(OE)
@@ -295,10 +312,10 @@ class LPE_Cartesian(LPE_Base):
     @tf.function(
         input_signature=[
             tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
-            tf.TensorSpec(shape=(), dtype=tf.float64),
+            tf.TensorSpec(shape=(None,), dtype=tf.float64),
         ],
     )
-    def dOE_dt_jit(self, OE, mu):
+    def dOE_dt_jit(self, OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(OE)
             trad_OE_dim = self.dimensionalize_state(OE)
@@ -344,12 +361,12 @@ class LPE_Equinoctial(LPE_Base):
         return equi_OE
 
     @tf.function(
-        input_signature=[
-            tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
-            tf.TensorSpec(shape=None, dtype=tf.float64),
-        ],
+        # input_signature=[
+        #     tf.TensorSpec(shape=(None, 6), dtype=tf.float64),
+        #     tf.TensorSpec(shape=(None,), dtype=tf.float64),
+        # ],
     )
-    def dOE_dt_jit(self, equinoctial_OE, mu):
+    def dOE_dt_jit(self, equinoctial_OE):
         with tf.GradientTape(persistent=True) as tape:
             tape.watch(equinoctial_OE)
             equi_OE_dim = self.dimensionalize_state(equinoctial_OE)
@@ -370,9 +387,9 @@ class LPE_Equinoctial(LPE_Base):
         s = tf.sqrt(1.0 + h**2 + k**2)
         w = 1.0 + f * tf.cos(L) + g * tf.sin(L)
         # p, f, g, L, h, k
-
+        mu = self.mu
         dpdt = (
-            2.0 * tf.sqrt(p / mu) * (-g * dUdOE[:, 1] + f * dUdOE[:, 2] + dUdOE[:, 3]),
+            2.0 * tf.sqrt(p / mu) * (-g * dUdOE[:, 1] + f * dUdOE[:, 2] + dUdOE[:, 3])
         )
         dfdt = (
             1.0
@@ -382,7 +399,7 @@ class LPE_Equinoctial(LPE_Base):
                 - (1.0 - f**2 - g**2) * dUdOE[:, 2]
                 - g * s**2 / 2.0 * (h * dUdOE[:, 4] + k * dUdOE[:, 5])
                 + (f + (1.0 + w) * tf.cos(L)) * dUdOE[:, 3]
-            ),
+            )
         )
         dgdt = (
             1.0
@@ -392,11 +409,10 @@ class LPE_Equinoctial(LPE_Base):
                 + (1.0 - f**2 - g**2) * dUdOE[:, 1]
                 + f * s**2 / 2.0 * (h * dUdOE[:, 4] + k * dUdOE[:, 5])
                 + (g + (1.0 + w) * tf.sin(L)) * dUdOE[:, 3]
-            ),
+            )
         )
-        dLdt = (
-            tf.sqrt(mu * p) * (w / p) ** 2
-            + s**2 / (2.0 * tf.sqrt(mu * p)) * (h * dUdOE[:, 4] + k * dUdOE[:, 5]),
+        dLdt = tf.sqrt(mu * p) * (w / p) ** 2 + s**2 / (2.0 * tf.sqrt(mu * p)) * (
+            h * dUdOE[:, 4] + k * dUdOE[:, 5]
         )
         dhdt = (
             s**2
@@ -404,7 +420,7 @@ class LPE_Equinoctial(LPE_Base):
             * (
                 h * (g * dUdOE[:, 1] - f * dUdOE[:, 2] - dUdOE[:, 3])
                 - s**2 / 2.0 * dUdOE[:, 5]
-            ),
+            )
         )
         dkdt = (
             s**2
@@ -415,9 +431,9 @@ class LPE_Equinoctial(LPE_Base):
             )
         )
 
-        dOE_dt = tf.concat(
-            [dpdt, dfdt, dgdt, dLdt, dhdt, tf.reshape(dkdt, (-1, 1))],
-            axis=1,
+        dOE_dt = tf.reshape(
+            tf.concat([dpdt, dfdt, dgdt, dLdt, dhdt, dkdt], axis=0),
+            (-1, 6),
         )
 
-        return dOE_dt[0]
+        return dOE_dt

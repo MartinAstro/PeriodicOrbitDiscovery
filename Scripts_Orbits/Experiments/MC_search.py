@@ -38,6 +38,8 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     np.random.seed(15)
 
+    # tf.config.run_functions_eagerly(True)
+
     model = pinnGravityModel(
         os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
     )
@@ -50,7 +52,7 @@ def main():
     }
 
     # replace command line arguments for debugging
-    # sys.argv = ["", "trad", "0"]
+    # sys.argv = ["", "mil", "1"]
 
     solver_key = sys.argv[1]
     index = int(sys.argv[2])

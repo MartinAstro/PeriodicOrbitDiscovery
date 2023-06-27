@@ -63,7 +63,7 @@ def bvp_equi_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
         rtol=tol,
     )
 
-    OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(np.array([X_0]), T_0, bounds)
+    OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
     elapsed_time = time.time() - start_time
 
     # propagate the initial and solution orbits
