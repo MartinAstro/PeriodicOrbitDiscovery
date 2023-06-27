@@ -26,7 +26,12 @@ def plot_solution_histogram(error, **kwargs):
 
 def main():
     directory = os.path.dirname(FrozenOrbits.__file__)
-    df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_cart.data")
+    cart_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_cart.data")
+    mil_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_mil.data")
+    trad_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_trad.data")
+
+    df = pd.concat((cart_df, mil_df, trad_df), axis=0)
+    df = df[df['valid'] == True]
 
     # compute percent error between initial and final state
     def compute_percent_error(row, key_prefix):
@@ -60,18 +65,18 @@ def main():
         label="Cartesian Shooting Method",
         alpha=0.8,
     )
-    # plot_solution_histogram(
-    #     trad_df["OE_percent"],
-    #     color="blue",
-    #     label="Traditional OE Shooting Method",
-    #     alpha=0.8,
-    # )
-    # plot_solution_histogram(
-    #     mil_df["OE_percent"],
-    #     color="red",
-    #     label="Milankovitch OE Shooting Method",
-    #     alpha=0.8,
-    # )
+    plot_solution_histogram(
+        trad_df["OE_percent"],
+        color="blue",
+        label="Traditional OE Shooting Method",
+        alpha=0.8,
+    )
+    plot_solution_histogram(
+        mil_df["OE_percent"],
+        color="red",
+        label="Milankovitch OE Shooting Method",
+        alpha=0.8,
+    )
     # plot_solution_histogram(
     #     equi_df["OE_percent"],
     #     color="red",
@@ -82,7 +87,7 @@ def main():
     plt.legend()
     plt.xlabel("Cartesian State Error after 10 Orbits [m]")
     plt.ylabel("\# of Solutions")
-    os.makedirs(directory + "/../Plots/")
+    os.makedirs(directory + "/../Plots/", exist_ok=True)
     vis.save(plt.gcf(), directory + "/../Plots/error_histogram.pdf")
     plt.show()
 
