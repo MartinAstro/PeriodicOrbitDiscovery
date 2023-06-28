@@ -52,27 +52,15 @@ def bvp_mil_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     # bounds = ([-2*1/np.sqrt(3), -2*1/np.sqrt(3), -2*1/np.sqrt(3), -0.3, -0.3, -0.3, -np.inf],
     #           [ 2*1/np.sqrt(3),  2*1/np.sqrt(3),  2*1/np.sqrt(3),  0.3,  0.3,  0.3,  np.inf])
 
+    H_m = H_mag_desired
     bounds = (
-        [
-            -1.0 * H_mag_desired,
-            -1.0 * H_mag_desired,
-            -1.0 * H_mag_desired,
-            -0.7,
-            -0.7,
-            -0.7,
-            -np.inf,
-            0.9,
-        ],
-        [
-            1.0 * H_mag_desired,
-            1.0 * H_mag_desired,
-            1.0 * H_mag_desired,
-            0.7,
-            0.7,
-            0.7,
-            np.inf,
-            1.1,
-        ],
+        [-1.0 * H_m, -1.0 * H_m, -1.0 * H_m, -0.7, -0.7, -0.7, -np.inf, 0.9],
+        [1.0 * H_m, 1.0 * H_m, 1.0 * H_m, 0.7, 0.7, 0.7, np.inf, 1.1],
+    )
+
+    bounds = (
+        [-np.inf, -np.inf, -np.inf, -1.0, -1.0, -1.0, -np.inf, 0.5],
+        [np.inf, np.inf, np.inf, 1.0, 1.0, 1.0, np.inf, 2.0],
     )
 
     # Shooting solvers

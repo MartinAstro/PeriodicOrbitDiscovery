@@ -1,5 +1,6 @@
 import time
 
+import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,6 +11,7 @@ from FrozenOrbits.analysis import (
 )
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
@@ -38,6 +40,11 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     bounds = (
         [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0.9 * T_0 / t_star],
         [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, 1.1 * T_0 / t_star],
+    )
+
+    bounds = (
+        [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0.5 * T_0 / t_star],
+        [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, 2.0 * T_0 / t_star],
     )
     # [OE, T] [N+1]
     decision_variable_mask = [True, True, True, True, True, True, True]
@@ -114,5 +121,14 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
 
 
 if __name__ == "__main__":
+    model = pinnGravityModel(
+        os.path.dirname(GravNN.__file__)
+        + "/../Data/Dataframes/eros_poly_061523_64.data",
+    )
     OE_0, X_0, T_0, planet = near_periodic_IC()
-    data = bvp_cart_OE(OE_0, X_0, T_0, planet, show=False)
+    data = bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-7, show=False)
+    print(data)
+
+    from pprint import pprint
+
+    pprint(data)

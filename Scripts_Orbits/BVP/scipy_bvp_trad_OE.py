@@ -18,7 +18,7 @@ from Scripts_Orbits.BVP.initial_conditions import *
 np.random.seed(15)
 
 
-def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
+def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=False):
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     lpe = LPE_Traditional(
         model.gravity_model,
@@ -32,10 +32,17 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     start_time = time.time()
 
     # Shooting solvers
+
     bounds = (
         [0.7, 0.1, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
         [1.0, 0.5, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
     )
+
+    bounds = (
+        [0, 0.01, -np.inf, -np.inf, -np.inf, -np.inf, 0.5],
+        [np.inf, 1.0, np.inf, np.inf, np.inf, np.inf, 2.0],
+    )
+
     decision_variable_mask = [True, True, True, True, True, True, True]  # [OE, T] [N+1]
     constraint_variable_mask = [
         True,
