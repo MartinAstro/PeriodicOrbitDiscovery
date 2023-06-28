@@ -118,11 +118,14 @@ def bvp_mil_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     valid = check_for_intersection(bvp_sol, planet.obj_8k)
 
     dX_0 = print_state_differences(init_sol)
-    dX_sol = print_state_differences(bvp_sol)
+    dX_0_sol = print_state_differences(bvp_sol)
 
     angle_wrap = constraint_angle_wrap_mask
     dOE_0, dOE_0_dimless = print_OE_differences(OE_0, lpe, "IVP", angle_wrap)
     dOE_sol, dOE_sol_dimless = print_OE_differences(OE_0_sol, lpe, "BVP", angle_wrap)
+
+    bvp_sol_10 = propagate_orbit(T_0_sol * 10, X_0_sol, model, tol=tol)
+    dX_0_sol_10 = print_state_differences(bvp_sol_10)
 
     if show:
         plot_cartesian_state_3d(init_sol.y.T, planet.obj_8k)
@@ -149,7 +152,8 @@ def bvp_mil_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
         "dOE_0": [dOE_0],
         "dOE_sol": [dOE_sol],
         "dX_0": [dX_0],
-        "dX_sol": [dX_sol],
+        "dX_0_sol": [dX_0_sol],
+        "dX_0_sol_10": [dX_0_sol_10],
         # "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],

@@ -64,7 +64,7 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     valid = check_for_intersection(bvp_sol, planet.obj_8k)
 
     dX_0 = print_state_differences(init_sol)
-    dX_sol = print_state_differences(bvp_sol)
+    dX_0_sol = print_state_differences(bvp_sol)
 
     # convert solution to traditional orbital elements
     OE_trad_init = cart2trad_tf(init_sol.y.T, planet.mu).numpy()
@@ -73,6 +73,9 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
     angle_wrap = constraint_angle_wrap
     dOE_0, dOE_0_dimless = print_OE_differences(OE_trad_init, lpe, "IVP", angle_wrap)
     dOE_sol, dOE_sol_dimless = print_OE_differences(OE_trad_bvp, lpe, "BVP", angle_wrap)
+
+    bvp_sol_10 = propagate_orbit(T_0_sol * 10, X_0_sol, model, tol=tol)
+    dX_0_sol_10 = print_state_differences(bvp_sol_10)
 
     print(f"Time Elapsed: {time.time()-start_time}")
     print(f"Initial OE: {OE_0} \t T: {T_0}")
@@ -88,7 +91,8 @@ def bvp_cart_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, show=False):
         "dOE_0": [dOE_0],
         "dOE_sol": [dOE_sol],
         "dX_0": [dX_0],
-        "dX_sol": [dX_sol],
+        "dX_0_sol": [dX_0_sol],
+        "dX_0_sol_10": [dX_0_sol_10],
         # "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],

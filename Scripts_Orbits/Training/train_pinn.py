@@ -9,7 +9,7 @@ os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
 
 
 def main():
-    df_file = "Data/Dataframes/eros_poly_061523.data"
+    df_file = "Data/Dataframes/eros_poly_061523_64.data"
     config = get_default_eros_config()
     config.update(PINN_III())
     config.update(ReduceLrOnPlateauConfig())
@@ -33,6 +33,7 @@ def main():
         "fuse_models": [False],
         "print_interval": [10],
         "remove_point_mass": [False],
+        "dtype": ["float64"],
     }
     args = configure_run_args(config, hparams)
     configs = [run(*args[0])]
