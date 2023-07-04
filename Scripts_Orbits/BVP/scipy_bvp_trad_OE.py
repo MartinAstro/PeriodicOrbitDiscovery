@@ -1,5 +1,6 @@
 import time
 
+import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,6 +11,7 @@ from FrozenOrbits.analysis import (
 )
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
+from FrozenOrbits.gravity_models import pinnGravityModel
 from FrozenOrbits.LPE import *
 from FrozenOrbits.utils import propagate_orbit
 from FrozenOrbits.visualization import *
@@ -18,7 +20,17 @@ from Scripts_Orbits.BVP.initial_conditions import *
 np.random.seed(15)
 
 
-def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=False):
+def bvp_trad_OE(
+    OE_0,
+    X_0,
+    T_0,
+    planet,
+    model,
+    tol=1e-9,
+    use_bounds=True,
+    show=False,
+    bounds=None,
+):
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
     lpe = LPE_Traditional(
         model.gravity_model,
@@ -32,16 +44,11 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=F
     start_time = time.time()
 
     # Shooting solvers
-
-    bounds = (
-        [0.7, 0.1, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
-        [1.0, 0.5, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
-    )
-
-    bounds = (
-        [0, 0.01, -np.inf, -np.inf, -np.inf, -np.inf, 0.5],
-        [np.inf, 1.0, np.inf, np.inf, np.inf, np.inf, 2.0],
-    )
+    if bounds is None:
+        bounds = (
+            [0, 0.01, -np.inf, -np.inf, -np.inf, -np.inf, 0.5],
+            [np.inf, 1.0, np.inf, np.inf, np.inf, np.inf, 2.0],
+        )
 
     decision_variable_mask = [True, True, True, True, True, True, True]  # [OE, T] [N+1]
     constraint_variable_mask = [
@@ -69,9 +76,16 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=F
         constraint_angle_wrap,
         rtol=tol,
         atol=tol,
+        max_nfev=10,
     )  # Finds a local optimum, step size gets too small
 
     OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
+    print("OE")
+    print(OE_0_sol[i] for i in range(len(OE_0_sol)))
+    print("Cart")
+    print(X_0_sol[i] for i in range(len(X_0_sol)))
+    print("Time")
+    print(T_0_sol)
     elapsed_time = time.time() - start_time
 
     # propagate the initial and solution orbits
@@ -97,8 +111,8 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=F
         plot_cartesian_state_3d(bvp_sol.y.T, planet.obj_8k)
         plt.title("BVP Solution")
 
-        plot_OE_1d(init_sol.t, OE_0, "traditional", y0_hline=True)
-        plot_OE_1d(bvp_sol.t, OE_0_sol, "traditional", y0_hline=True)
+        # plot_OE_1d(init_sol.t, OE_0, "traditional", y0_hline=True)
+        # plot_OE_1d(bvp_sol.t, OE_0_sol.y, "traditional", y0_hline=True)
         plt.show()
 
     print(f"Time Elapsed: {time.time()-start_time}")
@@ -127,4 +141,46 @@ def bvp_trad_OE(OE_0, X_0, T_0, planet, model, tol=1e-9, use_bounds=True, show=F
 
 
 if __name__ == "__main__":
-    bvp_trad_OE()
+    model = pinnGravityModel(
+        os.path.dirname(GravNN.__file__)
+        + "/../Data/Dataframes/eros_poly_061523_64.data",
+    )
+
+    def sample_initial_conditions():
+        planet = Eros()
+        a = np.random.uniform(1.3 * planet.radius, 1.5 * planet.radius)
+        e = np.random.uniform(0.1, 0.4)
+        i = np.random.uniform(np.pi / 4 - 0.25, np.pi / 4 + 0.25)
+        omega = np.random.uniform(0.0, 2 * np.pi)
+        Omega = np.random.uniform(0.0, 2 * np.pi)
+        M = np.random.uniform(0.0, 2 * np.pi)
+        trad_OE = np.array([[a, e, i, omega, Omega, M]])
+        X = trad2cart_tf(trad_OE, planet.mu).numpy()[0]
+        T = 2 * np.pi * np.sqrt(trad_OE[0, 0] ** 3 / planet.mu)
+
+        # Force custom IC for debugging
+        # trad_OE = np.array(
+        #     [[1.11e00 * a, 1.44e-02, np.pi / 4, 8.57e00, 2.98e00, -9.95e-01]],
+        # )
+        # X = trad2cart_tf(trad_OE, planet.mu).numpy()[0]
+        # T = 1.16e00 * T
+
+        return trad_OE, X, T, planet
+
+    OE_0, X_0, T_0, planet = sample_initial_conditions()
+    bounds = (
+        [0.9, 0.01, np.pi / 4 - 0.25, -np.inf, -np.inf, -np.inf, 0.5],
+        [1.1, 0.9, np.pi / 4 + 0.25, np.inf, np.inf, np.inf, np.inf],
+    )
+
+    # OE_0, X_0, T_0, planet = near_periodic_IC()
+    data = bvp_trad_OE(
+        OE_0,
+        X_0,
+        T_0,
+        planet,
+        model,
+        tol=1e-7,
+        show=True,
+        bounds=bounds,
+    )
