@@ -2,6 +2,7 @@ import os
 
 import GravNN
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from GravNN.Analysis.PlanesExperiment import PlanesExperiment
 from GravNN.Networks.Model import load_config_and_model
@@ -25,9 +26,11 @@ def main():
         remove_error=True,
     )
     planes_exp.run()
+    print(np.nanmean(planes_exp.percent_error_acc))
+    print(np.nanmax(planes_exp.percent_error_acc))
 
     vis = PlanesVisualizer(planes_exp)
-    vis.plot(percent_max=10, annotate_stats=True)
+    vis.plot(percent_max=10, annotate_stats=True, log=True)
 
     plt.show()
 
