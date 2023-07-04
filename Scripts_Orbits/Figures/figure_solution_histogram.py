@@ -19,7 +19,7 @@ def plot_solution_histogram(error, **kwargs):
     plt.hist(
         error,
         # bins=np.linspace(0, 100, 50),
-        bins=np.logspace(np.log10(1), np.log10(10**6), 50),
+        bins=np.logspace(np.log10(0.1), np.log10(10**6), 50),
         **kwargs,
     )
     plt.xscale("log")
@@ -41,7 +41,7 @@ def main():
             dX = row["dOE_sol"]
             X_0 = row["OE_0_sol"]
         else:
-            dX = row["dX_sol"]
+            dX = row["dX_0_sol"]
             X_0 = row["X_0_sol"]
 
         dX_percent = np.abs(dX / X_0) * 100
@@ -49,12 +49,16 @@ def main():
         return dX_percent_mag
 
     # compute percent error between initial and final state
-    def compute_distance(row):
-        dX = np.linalg.norm(row["dX_sol"][0:3])
+    def compute_distance(row, suffix=""):
+        if np.any(np.isnan(row[f"dX_0_sol{suffix}"])):
+            dX = np.nan
+        else:
+            dX = np.linalg.norm(row[f"dX_0_sol{suffix}"][0:3])
         return dX
 
     # Save into the dataframe
-    df["distance"] = df.apply(lambda row: compute_distance(row), axis=1)
+    df["distance"] = df.apply(lambda row: compute_distance(row, ""), axis=1)
+    df["distance_10"] = df.apply(lambda row: compute_distance(row, "_10"), axis=1)
 
     # compute validity
     def compute_validity(row):
@@ -92,6 +96,36 @@ def main():
     )
     plot_solution_histogram(
         mil_df["distance"],
+        color="red",
+        label="Milankovitch OE Shooting Method",
+        alpha=0.8,
+    )
+    # plot_solution_histogram(
+    #     equi_df["OE_percent"],
+    #     color="red",
+    #     label="Equinoctial OE Shooting Method",
+    #     alpha=0.8,
+    # )
+    plt.legend()
+    plt.xlabel("Cartesian State Error after 1 Orbits [m]")
+    plt.ylabel("\# of Solutions")
+
+    vis.newFig()
+
+    plot_solution_histogram(
+        cart_df["distance_10"],
+        color="orange",
+        label="Cartesian Shooting Method",
+        alpha=0.8,
+    )
+    plot_solution_histogram(
+        trad_df["distance_10"],
+        color="blue",
+        label="Traditional OE Shooting Method",
+        alpha=0.8,
+    )
+    plot_solution_histogram(
+        mil_df["distance_10"],
         color="red",
         label="Milankovitch OE Shooting Method",
         alpha=0.8,
