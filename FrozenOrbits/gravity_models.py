@@ -11,12 +11,20 @@ class ModelInterface:
 
     def compute_acceleration(self, X):
         X = np.array(X).reshape((-1, 3))
-        a = self.gravity_model.compute_acceleration(X).numpy()
+        a = self.gravity_model.compute_acceleration(X)
+        try:
+            a = a.numpy()
+        except Exception:
+            pass
         return a.squeeze()
 
     def compute_potential(self, X):
         X = np.array(X).reshape((-1, 3))
-        u = self.gravity_model.compute_potential(X).numpy()
+        u = self.gravity_model.compute_potential(X)
+        try:
+            u = u.numpy()
+        except Exception:
+            pass
         return u.squeeze()
 
 
@@ -58,13 +66,14 @@ class pinnGravityModel(ModelInterface):
         self.config = config
         self.gravity_model = gravity_model
         self.planet = config["planet"][0]
+        self.dtype = np.float32 if self.config["dtype"][0] == "float32" else np.float64
 
     def compute_dadx(self, X):
-        R = np.array(X).reshape((-1, 3)).astype(np.float32)
+        R = np.array(X).reshape((-1, 3)).astype(self.dtype)
         dadx = self.gravity_model.compute_dU_dxdx(R).numpy()  # this is also > 0
         return dadx.squeeze()
 
     def compute_disturbing_potential(self, X):
-        R = np.array(X).reshape((-1, 3)).astype(np.float32)
+        R = np.array(X).reshape((-1, 3)).astype(self.dtype)
         U_model = self.gravity_model.compute_disturbing_potential(R).numpy()
         return U_model.squeeze()
