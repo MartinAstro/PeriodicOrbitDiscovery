@@ -53,3 +53,18 @@ def crazy_IC():
     T = 2 * np.pi * np.sqrt(trad_OE[0, 0] ** 3 / planet.mu)
     T *= 4
     return trad_OE, X, T, planet
+
+
+def sample_initial_conditions(idx):
+    planet = Eros()
+    for _ in range(idx):
+        a = np.random.uniform(3 * planet.radius, 7 * planet.radius)
+        e = np.random.uniform(0.1, 0.3)
+        i = np.random.uniform(-np.pi, np.pi)
+        omega = np.random.uniform(0.0, 2 * np.pi)
+        Omega = np.random.uniform(0.0, 2 * np.pi)
+        M = np.random.uniform(0.0, 2 * np.pi)
+    trad_OE = np.array([[a, e, i, omega, Omega, M]])
+    X = trad2cart_tf(trad_OE, planet.mu).numpy()[0]
+    T = 2 * np.pi * np.sqrt(trad_OE[0, 0] ** 3 / planet.mu)
+    return trad_OE, X, T, planet
