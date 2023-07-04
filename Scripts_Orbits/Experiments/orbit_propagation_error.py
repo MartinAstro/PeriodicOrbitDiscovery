@@ -1,4 +1,5 @@
 import os
+import pickle
 import time
 
 import GravNN
@@ -33,6 +34,29 @@ def sample_initial_conditions():
     return trad_OE, X, T, planet
 
 
+# a function that tries to load the output of the propagate_orbit function from a pickle
+# if that function is not available, run the propagate orbit and pickle the output
+def propagate_orbit_wrapped(T_0, X_0, model, model_name, tol=1e-9):
+    directory = os.path.dirname(FrozenOrbits.__file__) + "/../Data/Prop/"
+    os.makedirs(directory, exist_ok=True)
+
+    file_name = directory + f"propagation_time_error_{T_0}_{X_0}_{model_name}.data"
+
+    if os.path.exists(file_name):
+        with open(file_name, "rb") as f:
+            sol = pickle.load(f)
+            dt = pickle.load(f)
+    else:
+        start_time = time.time()
+        sol = propagate_orbit(T_0, X_0, model, tol=tol)
+        dt = time.time() - start_time
+
+        with open(file_name, "wb") as f:
+            pickle.dump(sol, f)
+            pickle.dump(dt, f)
+    return dt, sol
+
+
 def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
 
@@ -53,7 +77,7 @@ def main():
         },
     )
 
-    for k in range(5):
+    for k in range(3):
         print(f"Iteration {k}")
         OE_0, X_0, T_0, planet = sample_initial_conditions()
 
@@ -62,13 +86,21 @@ def main():
         pinn_sol = propagate_orbit(T_0, X_0, model, tol=1e-9)
         dt_pinn = time.time() - pinn_start_time
 
-        poly_start_time = time.time()
-        poly_sol = propagate_orbit(T_0, X_0, poly_model, tol=1e-9)
-        dt_poly = time.time() - poly_start_time
+        dt_poly, poly_sol = propagate_orbit_wrapped(
+            T_0,
+            X_0,
+            poly_model,
+            "poly_model",
+            tol=1e-9,
+        )
 
-        poly_200_start_time = time.time()
-        poly_200_sol = propagate_orbit(T_0, X_0, poly_200_model, tol=1e-9)
-        dt_poly_200 = time.time() - poly_200_start_time
+        dt_poly_200, poly_200_sol = propagate_orbit_wrapped(
+            T_0,
+            X_0,
+            poly_200_model,
+            "poly_200_model",
+            tol=1e-9,
+        )
 
         df_k = (
             pd.DataFrame()
@@ -82,7 +114,8 @@ def main():
                     "poly_sol": [poly_sol],
                     "poly_200_sol": [poly_200_sol],
                     "Xf_pinn": [pinn_sol.y[:, -1]],
-                    "Xf_poly": [poly_sol.y[:, -1]],
+                    "Xf_poly_8k": [poly_sol.y[:, -1]],
+                    "Xf_poly_200k": [poly_200_sol.y[:, -1]],
                     "semi": [OE_0[0, 0]],
                 },
             )
