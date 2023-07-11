@@ -11,7 +11,10 @@ from GravNN.Visualization.PlanesVisualizer import PlanesVisualizer
 
 def main():
     gravnn_dir = os.path.dirname(GravNN.__file__) + "/../"
-    df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_061523.data")
+    # df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_061523.data")
+    # df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_070523.data")
+    # df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_071023.data")
+    df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_071123.data")
     model_id = df["id"].values[-1]
     config, model = load_config_and_model(model_id, df)
 
@@ -30,7 +33,7 @@ def main():
     print(np.nanmax(planes_exp.percent_error_acc))
 
     vis = PlanesVisualizer(planes_exp)
-    vis.plot(percent_max=10, annotate_stats=True, log=True)
+    vis.plot(percent_max=100, annotate_stats=True, log=True, z_min=1E-2)
 
     plt.show()
 

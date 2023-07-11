@@ -61,7 +61,7 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
 
     model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data",
     )
 
     planet = model.config["planet"][0]

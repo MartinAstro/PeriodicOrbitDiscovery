@@ -1,7 +1,6 @@
 import os
 
 import GravNN
-import matplotlib.colors as colors
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,6 +9,7 @@ from GravNN.Analysis.PlanesExperiment import PlanesExperiment
 from GravNN.GravityModels.Polyhedral import Polyhedral
 from GravNN.Networks.Model import load_config_and_model
 from GravNN.Visualization.PlanesVisualizer import PlanesVisualizer
+from FrozenOrbits.gravity_models import pinnGravityModel, polyhedralGravityModel
 
 import FrozenOrbits
 
@@ -21,8 +21,6 @@ class PlanesVisualizerPanel(PlanesVisualizer):
 
     def plot(self, max=None, **kwargs):
         self.max = max
-        Z = self.experiment.a_test
-        colors.LogNorm(vmin=Z.min(), vmax=Z.max(), clip="True")
 
         x = self.experiment.x_test
         y = self.experiment.percent_error_acc
@@ -65,9 +63,10 @@ class PlanesVisualizerPanel(PlanesVisualizer):
 
 def main():
     gravnn_dir = os.path.dirname(GravNN.__file__) + "/../"
-    df = pd.read_pickle(gravnn_dir + "Data/Dataframes/eros_poly_061523.data")
-    model_id = df["id"].values[-1]
-    config, model = load_config_and_model(model_id, df)
+    model = pinnGravityModel(
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data",
+    )
+    config = model.config
     planet = config["planet"][0]
     points = 100
     radius_bounds = [-5 * planet.radius, 5 * planet.radius]
