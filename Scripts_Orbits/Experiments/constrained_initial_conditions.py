@@ -40,12 +40,16 @@ def sample_initial_conditions():
 
 
 def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
-    scale = 1.0
-    scale = 100.0
-    l_star = np.linalg.norm(X_0[0:3]) / scale
-    t_star = np.linalg.norm(X_0[3:6]) * 10000 / l_star
+    
+    l_star = np.linalg.norm(X_0[0:3])
+    t_star = l_star / np.linalg.norm(X_0[3:6])
+
     lpe = LPE_Cartesian(
-        model.gravity_model, planet.mu, l_star=l_star, t_star=t_star, m_star=1.0
+        model.gravity_model,
+        planet.mu,
+        l_star=l_star,
+        t_star=t_star,
+        m_star=1.0,
     )
     start_time = time.time()
 
@@ -63,8 +67,8 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
         decision_variable_mask,
         constraint_variable_mask,
         constraint_angle_wrap,
-        rtol=1e-6,
-        atol=1e-6,
+        rtol=1e-7,
+        atol=1e-7,
         max_nfev=50,
     )
 
@@ -181,8 +185,8 @@ def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
         decision_variable_mask,
         constraint_variable_mask,
         constraint_angle_wrap,
-        rtol=1e-6,
-        atol=1e-6,
+        rtol=1e-7,
+        atol=1e-7,
         max_nfev=50,
     )
 
@@ -231,7 +235,7 @@ def main():
     """Solve a BVP problem using the dynamics of the cartesian state vector"""
 
     model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_BVP_PINN_III.data"
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data"
     )
 
     planet = model.config["planet"][0]
