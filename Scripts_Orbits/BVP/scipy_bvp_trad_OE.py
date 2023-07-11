@@ -76,7 +76,7 @@ def bvp_trad_OE(
         constraint_angle_wrap,
         rtol=tol,
         atol=tol,
-        max_nfev=10,
+        max_nfev=50,
     )  # Finds a local optimum, step size gets too small
 
     OE_0_sol, X_0_sol, T_0_sol, results = solver.solve(OE_0, T_0, bounds)
