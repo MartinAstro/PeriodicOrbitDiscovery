@@ -101,7 +101,7 @@ def plot_state_error(error, linestyle, label, color):
 
 def main():
     pinn_model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_061523.data",
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data",
     )
     planet = pinn_model.config["planet"][0]
     poly_8_model = polyhedralGravityModel(planet, planet.obj_8k)

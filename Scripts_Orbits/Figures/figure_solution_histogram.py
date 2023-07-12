@@ -29,9 +29,15 @@ def plot_solution_histogram(error, **kwargs):
 
 def main():
     directory = os.path.dirname(FrozenOrbits.__file__)
-    cart_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_cart.data")
-    mil_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_mil.data")
-    trad_df = pd.read_pickle(directory + "/../Data/MC/orbit_solutions_trad.data")
+    cart_df = pd.read_pickle(
+        directory + "/../Data/MC/MC_df/orbit_solutions_cart.data"
+    )
+    mil_df = pd.read_pickle(
+        directory + "/../Data/MC/MC_df/orbit_solutions_mil.data"
+    )
+    trad_df = pd.read_pickle(
+        directory + "/../Data/MC/MC_df/orbit_solutions_trad.data"
+    )
 
     df = pd.concat((cart_df, mil_df, trad_df), axis=0)
 
@@ -94,12 +100,12 @@ def main():
         label="Traditional OE Shooting Method",
         alpha=0.8,
     )
-    plot_solution_histogram(
-        mil_df["distance"],
-        color="red",
-        label="Milankovitch OE Shooting Method",
-        alpha=0.8,
-    )
+    # plot_solution_histogram(
+    #     mil_df["distance"],
+    #     color="red",
+    #     label="Milankovitch OE Shooting Method",
+    #     alpha=0.8,
+    # )
     # plot_solution_histogram(
     #     equi_df["OE_percent"],
     #     color="red",
@@ -124,12 +130,12 @@ def main():
         label="Traditional OE Shooting Method",
         alpha=0.8,
     )
-    plot_solution_histogram(
-        mil_df["distance_10"],
-        color="red",
-        label="Milankovitch OE Shooting Method",
-        alpha=0.8,
-    )
+    # plot_solution_histogram(
+    #     mil_df["distance_10"],
+    #     color="red",
+    #     label="Milankovitch OE Shooting Method",
+    #     alpha=0.8,
+    # )
     # plot_solution_histogram(
     #     equi_df["OE_percent"],
     #     color="red",

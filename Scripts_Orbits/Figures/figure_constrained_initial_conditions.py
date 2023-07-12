@@ -1,12 +1,11 @@
 import os
-
+import pandas as pd
 import GravNN
 import matplotlib.pyplot as plt
 import numpy as np
 from GravNN.CelestialBodies.Asteroids import Eros
 
 import FrozenOrbits
-from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
 from FrozenOrbits.gravity_models import pinnGravityModel
@@ -53,7 +52,7 @@ def get_integrated_orbit(T_0, X_0, model):
 def gather_integrated_orbits(df):
     planet = Eros()
     model = pinnGravityModel(
-        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_BVP_PINN_III.data"
+        os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data"
     )
 
     T_0, X_0 = get_original_IC(df, 0)  # use 0 b/c they all share same IC
@@ -305,7 +304,7 @@ def plot_OE_diff(experiment_name_list, cart_orbit_list, OE_orbit_list):
 def main():
     directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
     df = pd.read_pickle(directory + "constrained_orbit_solutions.data")
-    df = df.drop(index="OE_bounded")
+    # df = df.drop(index="OE_bounded")
     (
         experiment_name_list,
         cart_orbit_list,

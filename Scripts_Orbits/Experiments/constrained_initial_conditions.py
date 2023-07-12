@@ -5,14 +5,13 @@ import GravNN
 import numpy as np
 import pandas as pd
 from GravNN.CelestialBodies.Asteroids import Eros
-
+import multiprocessing as mp
 import FrozenOrbits
 from FrozenOrbits.analysis import (
     check_for_intersection,
     print_OE_differences,
     print_state_differences,
 )
-from FrozenOrbits.boundary_conditions import *
 from FrozenOrbits.bvp import *
 from FrozenOrbits.constraints import *
 from FrozenOrbits.gravity_models import pinnGravityModel
@@ -23,12 +22,13 @@ from Scripts_Orbits.BVP.initial_conditions import *
 
 np.random.seed(15)
 
-
+inc_bounds = [np.pi/3 - 0.1, np.pi/3 + 0.1]
+time_bounds = [0.5, 10]
 def sample_initial_conditions():
     planet = Eros()
-    a = np.random.uniform(3 * planet.radius, 7 * planet.radius)
+    a = np.random.uniform(3 * planet.radius, 5 * planet.radius)
     e = np.random.uniform(0.1, 0.3)
-    i = np.random.uniform(-np.pi, np.pi)
+    i = np.random.uniform(inc_bounds[0], inc_bounds[1])
     omega = np.random.uniform(0.0, 2 * np.pi)
     Omega = np.random.uniform(0.0, 2 * np.pi)
     M = np.random.uniform(0.0, 2 * np.pi)
@@ -40,7 +40,7 @@ def sample_initial_conditions():
 
 
 def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
-    
+
     l_star = np.linalg.norm(X_0[0:3])
     t_star = l_star / np.linalg.norm(X_0[3:6])
 
@@ -55,8 +55,8 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
 
     # Shooting solvers
     bounds = (
-        [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, 0.9 * T_0 / t_star],
-        [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, 1.1 * T_0 / t_star],
+        [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, time_bounds[0] * T_0 / t_star],
+        [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, time_bounds[1] * T_0 / t_star],
     )
     decision_variable_mask = [True, True, True, True, True, True, True]  # [OE, T] [N+1]
     constraint_variable_mask = [True, True, True, True, True, True, False]
@@ -106,7 +106,7 @@ def solve_cart(model, OE_0, X_0, T_0, planet, experiment):
         "dOE_sol": [dOE_sol],
         "dX_0": [dX_0],
         "dX_sol": [dX_sol],
-        "lpe": [lpe],
+        # "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
     }
@@ -117,36 +117,18 @@ def bounds_and_mask_fcn(experiment, OE_0):
     if experiment == "OE_constrained":
         # Fix the semi major axis and inclination
         bounds = (
-            [0.9, 0.0001, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
-            [1.1, 1.0, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
+            [-np.inf, 0.0001,  inc_bounds[0], -2 * np.pi, -2 * np.pi, -2 * np.pi, time_bounds[0]],
+            [np.inf, 1.0,     inc_bounds[1], 2 * np.pi,  2 * np.pi,  2 * np.pi, time_bounds[1]],
         )
-        decision_variable_mask = [False, True, False, True, True, True, True]
-        constraint_variable_mask = [True, True, True, True, True, True, False]
-        constraint_angle_wrap = [False, False, False, True, True, True, False]
-    elif experiment == "OE_bounded":
-        # Allow semi-major axis and inclination to change, but only within a fixed window
-        i = OE_0[0, 2]
-        bounds = (
-            [0.9, 0.0001, i - np.pi / 8, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
-            [1.1, 1.0, i + np.pi / 8, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
-        )
-        decision_variable_mask = [
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-            True,
-        ]  # [OE, T] [N+1]
+        decision_variable_mask = [True, True, False, True, True, True, True]
         constraint_variable_mask = [True, True, True, True, True, True, False]
         constraint_angle_wrap = [False, False, False, True, True, True, False]
     else:
         # All OE are allowed to change (though soft bounds are placed on semi major
         # and eccentricity to assure convergence)
         bounds = (
-            [0.1, 0.0001, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, 0.9],
-            [np.inf, 1.0, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, 2.0],
+            [0.1, 0.0001, -np.pi, -2 * np.pi, -2 * np.pi, -2 * np.pi, time_bounds[0]],
+            [np.inf, 1.0, np.pi, 2 * np.pi, 2 * np.pi, 2 * np.pi, time_bounds[1]],
         )
 
         # [OE, T] [N+1]
@@ -162,7 +144,7 @@ def bounds_and_mask_fcn(experiment, OE_0):
     )
 
 
-def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
+def solve_OE(model, OE_0, X_0, T_0, planet, experiment):
     (
         bounds,
         decision_variable_mask,
@@ -224,21 +206,31 @@ def solve_OE(model, OE_0, X_0, T_0, planet, experiment, bounds_and_mask_fcn):
         "dOE_sol": [dOE_sol],
         "dX_0": [dX_0],
         "dX_sol": [dX_sol],
-        "lpe": [lpe],
+        # "lpe": [lpe],
         "elapsed_time": [elapsed_time],
         "result": [results],
     }
     return data
 
-
-def main():
-    """Solve a BVP problem using the dynamics of the cartesian state vector"""
+def run_experiment(experiment, OE_0, X_0, T_0, planet):
 
     model = pinnGravityModel(
         os.path.dirname(GravNN.__file__) + "/../Data/Dataframes/eros_poly_071123.data"
     )
 
-    planet = model.config["planet"][0]
+    print(f"Experiment: {experiment}")
+    if experiment == "cartesian":
+        data = solve_cart(model, np.array([X_0]), X_0, T_0, planet, experiment)
+    else:
+        data = solve_OE(model, OE_0, X_0, T_0, planet, experiment)
+    df_k = pd.DataFrame().from_dict(data).set_index("experiment")
+    return df_k 
+
+def main():
+    """Solve a BVP problem using the dynamics of the cartesian state vector"""
+
+ 
+
     df = pd.DataFrame(
         {
             "T_0": [],
@@ -258,13 +250,16 @@ def main():
     experiment_list = ["cartesian", "OE", "OE_constrained"]
     OE_0, X_0, T_0, planet = sample_initial_conditions()
 
-    for experiment in experiment_list:
-        print(f"Experiment: {experiment}")
-        if experiment == "cartesian":
-            data = solve_cart(model, np.array([X_0]), X_0, T_0, planet, experiment)
-        else:
-            data = solve_OE(model, OE_0, X_0, T_0, planet, experiment)
-        df_k = pd.DataFrame().from_dict(data).set_index("experiment")
+        
+
+    # multiprocess the experiment
+    pool = mp.Pool(len(experiment_list))
+    results = [pool.apply_async(run_experiment, args=(experiment, OE_0, X_0, T_0, planet)) for experiment in experiment_list]
+    pool.close()
+    pool.join()
+
+    for result in results:
+        df_k = result.get()
         df = pd.concat([df, df_k], axis=0)
 
     directory = os.path.dirname(FrozenOrbits.__file__) + "/Data/"
