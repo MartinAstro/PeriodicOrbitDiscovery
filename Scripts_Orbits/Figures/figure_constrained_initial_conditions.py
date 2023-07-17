@@ -15,7 +15,7 @@ from FrozenOrbits.visualization import *
 from Scripts_Orbits.BVP.initial_conditions import *
 
 vis = VisualizationBase()
-vis.fig_size = (2.1, 2.1 * 1.25)
+vis.fig_size = (vis.w_tri, vis.w_tri)
 
 plt.rc("font", size=8)
 plt.rc("axes", labelsize=8)
@@ -107,6 +107,17 @@ def plot_cartesian_orbits(experiment_name_list, cart_orbit_list, original_orbit)
             fig_size=vis.fig_size,
         )
         plt.legend(loc="upper center")
+        # label all axes with units of meters
+        plt.gca().set_xlabel("")
+        plt.gca().set_ylabel("")
+        plt.gca().set_zlabel("")
+
+        # remove tick labels
+        plt.gca().xaxis.set_ticklabels([])
+        plt.gca().yaxis.set_ticklabels([])
+        plt.gca().zaxis.set_ticklabels([])
+
+
         name = experiment_name_list[k].replace(" ", "_")
         vis.save(plt.gcf(), f"{base_figure_name}_{name}_corrected.pdf")
 
